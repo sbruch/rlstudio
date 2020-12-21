@@ -17,5 +17,7 @@ setup(
         'optax>=0.0.1',
         'dm-haiku>=0.0.2',
     ],
+    license='MIT',
+    packages=find_namespace_packages(include=['rlstudio.*']),
     python_requires='>=3.6',
 )
