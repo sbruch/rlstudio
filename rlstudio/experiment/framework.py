@@ -13,9 +13,9 @@ class Experiment:
 
   def train(self,
             tasks: List[env_base.Task],
-            repeat: int,
-            episodes: int,
-            eval_step: int,
+            repeat: int = 0,
+            episodes: int = 100,
+            eval_step: int = 1,
             summary: slib.Summary = None) -> None:
     """Trains the agent on a series of tasks.
 
@@ -33,7 +33,7 @@ class Experiment:
         raise ValueError('All tasks used for training must be of the same type')
 
     time = -1
-    for round_id in range(repeat):
+    for round_id in range(repeat + 1):
       for task in tasks:
         print(f'Training agent for {episodes} episodes on task {task.id()}')
     
