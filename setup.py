@@ -18,6 +18,6 @@ setup(
         'dm-haiku>=0.0.2',
     ],
     license='MIT',
-    packages=find_namespace_packages(include=['rlstudio.*']),
+    packages=find_namespace_packages(include=['rlstudio', 'rlstudio.*']),
     python_requires='>=3.6',
 )
