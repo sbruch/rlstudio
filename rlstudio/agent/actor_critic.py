@@ -14,9 +14,12 @@ import optax
 import rlax
 from typing import Any, Callable, List, NamedTuple, Tuple
 
-Logits = jnp.ndarray
-NetworkOutput = Tuple[Logits, Value, PolicyEmbedding, ValueEmbedding, StateEmbedding]
-PolicyValueNet = Callable[[jnp.ndarray, jnp.ndarray, jnp.ndarray], NetworkOutput]
+Observation = jnp.ndarray
+PreviousReward = jnp.ndarray
+PreviousAction = jnp.ndarray
+PolicyLogits = jnp.ndarray
+ModelOutput = Tuple[PolicyLogits, Value, PolicyEmbedding, ValueEmbedding, StateEmbedding]
+PolicyValueNet = Callable[[Observation, PreviousReward, PreviousAction], ModelOutput]
 
 
 class AgentState(NamedTuple):
@@ -155,9 +158,9 @@ def make(observation_spec: specs.Array,
          critic_cost: float = 1.,
          seed: int = 0):
   """Creates a default agent."""
-  def network(observation: jnp.ndarray,
-              previous_reward: jnp.ndarray,
-              previous_action: jnp.ndarray) -> NetworkOutput:
+  def network(observation: Observation,
+              previous_reward: PreviousReward,
+              previous_action: PreviousAction) -> ModelOutput:
     observation = hk.Flatten()(observation)
     previous_reward = hk.Flatten()(previous_reward)
     previous_action = hk.Flatten()(previous_action)

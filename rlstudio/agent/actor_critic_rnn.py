@@ -14,9 +14,10 @@ import rlax
 from typing import Any, Callable, List, NamedTuple, Tuple
 
 RNNState = Any
-Logits = jnp.ndarray
-NetworkOutput = Tuple[Logits, Value, PolicyEmbedding, ValueEmbedding, StateEmbedding]
-PolicyValueNet = Callable[[List[jnp.ndarray], RNNState], Tuple[NetworkOutput, RNNState]]
+PolicyLogits = jnp.ndarray
+ModelOutput = Tuple[PolicyLogits, Value, PolicyEmbedding, ValueEmbedding, StateEmbedding]
+# Input to a PolicyValueNet consists of: Observation, previous reward, and previous action tensors.
+PolicyValueNet = Callable[[List[jnp.ndarray], RNNState], Tuple[ModelOutput, RNNState]]
 
 
 class AgentState(NamedTuple):
@@ -183,7 +184,7 @@ def make(observation_spec: specs.Array,
   """Creates a default agent."""
   initial_rnn_state = jnp.zeros((1, rnn_hidden_size), dtype=jnp.float32)
 
-  def network(inputs: List[jnp.ndarray], state):
+  def network(inputs: List[jnp.ndarray], state) -> ModelOutput:
     observation = hk.Flatten()(inputs[0]).reshape((1, -1))
     previous_reward = inputs[1].reshape((1, 1))
     previous_action = inputs[2].reshape((1, -1))
