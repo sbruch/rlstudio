@@ -1,7 +1,7 @@
 from rlstudio.agent import base as agent_base
 from rlstudio.environment import base as env_base
 from rlstudio.experiment import base as exp_base
-from rlstudio.experiment import summary as slib
+from rlstudio.experiment import record
 
 from typing import List
 
@@ -16,7 +16,7 @@ class Experiment:
             repeat: int = 0,
             episodes: int = 100,
             eval_step: int = 1,
-            summary: slib.Summary = None) -> None:
+            summary: record.Summary = None) -> None:
     """Trains the agent on a series of tasks.
 
     Args:
@@ -63,7 +63,7 @@ class Experiment:
 
   def test(self,
            tasks: List[env_base.Task],
-           summary: slib.Summary = None) -> None:
+           summary: record.Summary = None) -> None:
     """Tests an agent on a set of tasks and optionally records statistics in `summary`."""
     if len(tasks) == 0:
       raise ValueError('At least one task must be provided to test the agent on')
@@ -79,7 +79,7 @@ class Experiment:
 
   def _eval(self,
             metadata: exp_base.EvaluationMetadata,
-            summary: slib.Summary,
+            summary: record.Summary,
             task: env_base.Task) -> float:
     """Evaluates the agent on a given task and records statistics.
 
