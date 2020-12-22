@@ -48,6 +48,9 @@ class Experiment:
 
   def test(self, summary: record.Summary = None) -> None:
     """Tests an agent on test tasks and optionally records statistics in `summary`."""
+    if self.config.test_tasks is None:
+      return
+
     time = -1
     for round_id in range(self.config.repeat + 1):
       for task_idx, task in self.config.test_tasks:
@@ -69,7 +72,6 @@ class Experiment:
     """
     returns = 0.
 
-    # Start a new episode and reset the initial state of the agent.
     timestep = task.reset()
     if self.config.reset_agent:
       self.agent.reset()

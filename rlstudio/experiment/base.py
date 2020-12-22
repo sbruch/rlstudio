@@ -28,11 +28,11 @@ class Configuration:
   repeat: Number of times to repeat the series of tasks.
   reset_agent: Whether to call `reset()` on the agent at the beginning of every episode.
   """
-  train_tasks: List[env_base.Task],
+  train_tasks: List[env_base.Task]
   train_episodes: int = 100
   train_eval_step: int = 1
 
-  test_tasks: List[env_base.Task],
+  test_tasks: List[env_base.Task] = None
   test_episodes: int = 1
 
   repeat: int = 0
@@ -46,6 +46,7 @@ class Configuration:
       if type(task) is not type(train_tasks[0]):
         raise ValueError('All tasks used for training must be of the same type')
 
-    for task in test_tasks:
-      if type(task) is not type(test_tasks[0]):
-        raise ValueError('All tasks used for testing must be of the same type')
+    if test_tasks is not None:
+      for task in test_tasks:
+        if type(task) is not type(test_tasks[0]):
+          raise ValueError('All tasks used for testing must be of the same type')
