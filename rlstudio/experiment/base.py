@@ -1,5 +1,5 @@
 from rlstudio.environment import base as env_base
-from rlstudio.typing import EpisodeId, RoundId, TaskId, Time
+from rlstudio.typing import EpisodeId, RoundId, RunId, TaskId, Time
 
 from dataclasses import dataclass
 from typing import List
@@ -7,6 +7,7 @@ from typing import List
 
 @dataclass
 class EvaluationMetadata:
+  run_id: RunId
   time: Time
   task_id: TaskId
   round_id: RoundId

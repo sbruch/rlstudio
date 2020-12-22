@@ -25,6 +25,8 @@ ObservationType = str
 Value = jnp.ndarray
 
 
+"""Types used in experiments."""
 EpisodeId = int
-Time = int
 RoundId = int
+RunId = int
+Time = int

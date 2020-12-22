@@ -2,13 +2,16 @@ from rlstudio.agent import base as agent_base
 from rlstudio.environment import base as env_base
 from rlstudio.experiment import base as exp_base
 from rlstudio.experiment import record
+from rlstudio.typing import RunId
 
 
 class Experiment:
   """Defines an experiment."""
   def __init__(self,
+               run_id: RunId,
                config: exp_base.Configuration,
                agent: agent_base.Agent):
+    self.run_id = run_id
     self.config = config
     self.agent = agent
     self.config.validate()
@@ -24,7 +27,8 @@ class Experiment:
           # Evaluation.
           if not episode % self.config.train_eval_step:
             time += 1
-            metadata = exp_base.EvaluationMetadata(time, task.id(), round_id, episode)
+            metadata = exp_base.EvaluationMetadata(
+              self.run_id, time, task.id(), round_id, episode)
             returns = self._eval(metadata, summary, task)
             print(f'Episode {episode:4d}: Returns: {returns:.2f}')
 
@@ -42,7 +46,7 @@ class Experiment:
         # Post-training evaluation.
         time += 1
         metadata = exp_base.EvaluationMetadata(
-          time, task.id(), round_id, self.config.train_episodes)
+          self.run_id, time, task.id(), round_id, self.config.train_episodes)
         returns = self._eval(metadata, summary, task)
         print(f'Final eval: Returns: {returns:.2f}')
 
@@ -57,7 +61,7 @@ class Experiment:
         for episode in range(self.config.test_episodes):
           time += 1
           metadata = exp_base.EvaluationMetadata(
-            time, task.id(), round_id, episode_id)
+            self.run_id, time, task.id(), round_id, episode_id)
           returns = self._eval(metadata, summary, task)
           print(f'Tested agent on task {task.id()}: Total return is {returns:.2f}')
 
