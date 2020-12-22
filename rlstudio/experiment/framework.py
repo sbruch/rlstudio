@@ -1,7 +1,7 @@
 from rlstudio.agent import base as agent_base
 from rlstudio.environment import base as env_base
 from rlstudio.experiment import base as exp_base
-from rlstudio.stats import record
+from rlstudio.stats import base as stats_base
 from rlstudio.typing import RunId
 
 
@@ -16,7 +16,7 @@ class Experiment:
     self.agent = agent
     self.config.validate()
 
-  def train(self, summary: record.Summary = None) -> None:
+  def train(self, summary: stats_base.Summary = None) -> None:
     """Trains the agent on training tasks and optionally records statistics in `summary`."""
     time = -1
     for round_id in range(self.config.repeat + 1):
@@ -50,7 +50,7 @@ class Experiment:
         returns = self._eval(metadata, summary, task)
         print(f'Final eval: Returns: {returns:.2f}')
 
-  def test(self, summary: record.Summary = None) -> None:
+  def test(self, summary: stats_base.Summary = None) -> None:
     """Tests an agent on test tasks and optionally records statistics in `summary`."""
     if self.config.test_tasks is None:
       return
@@ -67,7 +67,7 @@ class Experiment:
 
   def _eval(self,
             metadata: exp_base.EvaluationMetadata,
-            summary: record.Summary,
+            summary: stats_base.Summary,
             task: env_base.Task) -> float:
     """Evaluates the agent on a given task and records statistics.
 
