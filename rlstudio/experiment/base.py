@@ -46,8 +46,6 @@ class Configuration:
       if type(task) is not type(train_tasks[0]):
         raise ValueError('All tasks used for training must be of the same type')
 
-    if len(test_tasks) == 0:
-      raise ValueError('At least one task must be provided to test the agent on')
     for task in test_tasks:
       if type(task) is not type(test_tasks[0]):
         raise ValueError('All tasks used for testing must be of the same type')
