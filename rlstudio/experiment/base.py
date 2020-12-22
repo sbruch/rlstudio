@@ -40,13 +40,13 @@ class Configuration:
 
   def validate(self):
     """Validates the configuration, raising an exception if invalid."""
-    if len(train_tasks) == 0:
+    if len(self.train_tasks) == 0:
       raise ValueError('At least one task must be provided to train the agent on')
-    for task in train_tasks:
-      if type(task) is not type(train_tasks[0]):
+    for task in self.train_tasks:
+      if type(task) is not type(self.train_tasks[0]):
         raise ValueError('All tasks used for training must be of the same type')
 
-    if test_tasks is not None:
-      for task in test_tasks:
-        if type(task) is not type(test_tasks[0]):
+    if self.test_tasks is not None:
+      for task in self.test_tasks:
+        if type(task) is not type(self.test_tasks[0]):
           raise ValueError('All tasks used for testing must be of the same type')
