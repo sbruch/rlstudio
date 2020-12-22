@@ -8,7 +8,7 @@ from typing import List
 @dataclass
 class EvaluationMetadata:
   time: Time
-  env_id: TaskId
+  task_id: TaskId
   round_id: RoundId
   episode_id: EpisodeId
 
