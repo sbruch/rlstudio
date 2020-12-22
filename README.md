@@ -14,6 +14,6 @@ agent = actor_critic_rnn.make(task.observation_spec(),
                               task.action_spec())
 
 config = base.Configuration(train_tasks=[task])
-exp = framework.Experiment(config, agent)
+exp = framework.Experiment(run_id=0, config, agent)
 exp.train()
 ```
