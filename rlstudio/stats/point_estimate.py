@@ -40,9 +40,9 @@ class PointEstimate:
     self.stats[run, r, t, h] = estimate
 
   def render(self, output_dir: str,
-           xlabel: str, ylabel: str, ceiling: float):
-    return render(self.id, self.stats, self.task_ids,
-         output_dir, xlabel, ylabel, ceiling=ceiling)
+             xlabel: str, ylabel: str, ceiling: float):
+    return render(self.stats, self.task_ids,
+                  output_dir, xlabel, ylabel, ceiling=ceiling)
 
   def is_compatible(self, other) -> bool:
     if not isinstance(other, PointEstimate):
@@ -82,8 +82,7 @@ def unify(points: List[PointEstimate]) -> PointEstimate:
   return unified
 
 
-def render(plot_id: str,
-           stats: np.ndarray,
+def render(stats: np.ndarray,
            task_ids: List[str],
            output_dir: str,
            xlabel: str, ylabel: str,
