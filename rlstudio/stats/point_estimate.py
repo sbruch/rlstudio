@@ -1,6 +1,5 @@
 import matplotlib.pyplot as plt
 import numpy as np
-import os
 from rlstudio.experiment import base as exp_base
 from typing import List
 
