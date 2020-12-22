@@ -39,10 +39,8 @@ class PointEstimate:
     run = metadata.run_id % self.nruns
     self.stats[run, r, t, h] = estimate
 
-  def render(self, output_dir: str,
-             xlabel: str, ylabel: str, ceiling: float):
-    return render(self.stats, self.task_ids,
-                  output_dir, xlabel, ylabel, ceiling=ceiling)
+  def render(self, xlabel: str, ylabel: str, ceiling: float):
+    return render(self.stats, self.task_ids, xlabel, ylabel, ceiling=ceiling)
 
   def is_compatible(self, other) -> bool:
     if not isinstance(other, PointEstimate):
@@ -84,7 +82,6 @@ def unify(points: List[PointEstimate]) -> PointEstimate:
 
 def render(stats: np.ndarray,
            task_ids: List[str],
-           output_dir: str,
            xlabel: str, ylabel: str,
            xticks=None, ceiling=None):
   """Renders the statistics accumulated in `stats` into the destination directory.
@@ -92,7 +89,6 @@ def render(stats: np.ndarray,
   Args:
     stats: A Numpy array with shape: [num_runs, num_rounds, num_tasks, horizon].
     task_ids: A list of task identifiers.
-    output_dir: Destination directory.
     xlabel: Label for the x axis.
     ylabel: Label for the y axis.
     xticks: Optional xticks. Computed automatically if not given.
