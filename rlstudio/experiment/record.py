@@ -21,15 +21,3 @@ class Summary:
                       timestep: env_base.TimeStep,
                       decision: agent_base.Decision) -> None:
     """Records an agent's decision."""
-
-  @abc.abstractmethod
-  def finalize(self) -> None:
-    """Finalizes the statistics recorded."""
-
-  @abc.abstractmethod
-  def serialize(self, output_dir: str) -> None:
-    """Serializes the summary data into files."""
-
-  @abc.abstractmethod
-  def deserialize(self, input_dir: str) -> None:
-    """Deserializes a Summary from data files."""
