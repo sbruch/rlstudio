@@ -23,5 +23,5 @@ class Summary:
     """Records an agent's decision."""
 
   @abc.abstractmethod
-  def commit_episode(self) -> None:
+  def commit_episode(self, metadata: exp_base.EvaluationMetadata) -> None:
     """Finalizes data for the preceding episode.."""

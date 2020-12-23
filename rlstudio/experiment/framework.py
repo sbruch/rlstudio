@@ -89,6 +89,6 @@ class Experiment:
 
     if summary is not None:
       summary.record_return(metadata, returns)
-      summary.commit_episode()
+      summary.commit_episode(metadata)
 
     return returns
