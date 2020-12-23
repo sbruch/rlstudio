@@ -39,8 +39,11 @@ class PointEstimate:
     run = metadata.run_id % self.nruns
     self.stats[run, r, t, h] = estimate
 
-  def render(self, xlabel: str, ylabel: str, ceiling: float):
-    return render(self.stats, self.task_ids, xlabel, ylabel, ceiling=ceiling)
+  def render_sequential(self, xlabel: str, ylabel: str, ceiling: float = None):
+    return render_sequential(self.stats, self.task_ids, xlabel, ylabel, ceiling=ceiling)
+
+  def render_compact(self, xlabel: str, ylabel: str, ceiling: float = None):
+    return render_compact(self.stats, self.task_ids, xlabel, ylabel, ceiling=ceiling)
 
   def is_compatible(self, other) -> bool:
     if not isinstance(other, PointEstimate):
@@ -80,11 +83,11 @@ def unify(points: List[PointEstimate]) -> PointEstimate:
   return unified
 
 
-def render(stats: np.ndarray,
-           task_ids: List[str],
-           xlabel: str, ylabel: str,
-           xticks=None, ceiling=None):
-  """Renders the statistics accumulated in `stats` into the destination directory.
+def render_sequential(stats: np.ndarray,
+                      task_ids: List[str],
+                      xlabel: str, ylabel: str,
+                      xticks=None, ceiling=None):
+  """Renders the statistics accumulated in `stats` one task at a time.
 
   Args:
     stats: A Numpy array with shape: [num_runs, num_rounds, num_tasks, horizon].
@@ -152,5 +155,77 @@ def render(stats: np.ndarray,
   plt.xlabel(xlabel)
   plt.ylabel(ylabel)
   plt.tight_layout()
+  plt.close()
+
+  return fig, ax
+
+
+def render_compact(stats: np.ndarray,
+                   task_ids: List[str],
+                   xlabel: str, ylabel: str,
+                   xticks=None, ceiling=None):
+  """Renders the statistics accumulated in `stats` in a compact plot.
+
+  Args:
+    stats: A Numpy array with shape: [num_runs, num_rounds, num_tasks, horizon].
+    task_ids: A list of task identifiers.
+    xlabel: Label for the x axis.
+    ylabel: Label for the y axis.
+    xticks: Optional xticks. Computed automatically if not given.
+    ceiling: Optional maximum value achievable. A dashed horizontal line
+        is plotted to highlight this value.
+
+  Returns:
+    A tuple containing `matplotlib.figure.Figure` and `matplotlib.axes.Axes`.
+  """
+  if stats.ndim != 4:
+    raise ValueError(f'Expect point statistics to be 4-dimensional, but it has {stats.ndim} dimensions')
+  if len(task_ids) != stats.shape[2]:
+    raise ValueError('Number of task IDs must match the second dimension of point statistics, '
+                     f'but task IDs are: {task_ids}')
+
+  nruns = stats.shape[0]
+  nrounds = stats.shape[1]
+  ntasks = stats.shape[2]
+  horizon = stats.shape[3]
+
+  # Construct a color map.
+  unique_task_ids = sorted(np.unique(task_ids))
+  cmap = iter(plt.cm.rainbow(np.linspace(0, 1, len(unique_task_ids))))
+  colors = {}
+  for task_id in unique_task_ids:
+    colors[task_id] = next(cmap)
+
+  # Plot.
+  fig, ax = plt.subplots()
+
+  for task_idx, task_id in enumerate(task_ids):
+    data = stats[:, :, task_idx, :].reshape((nruns, -1))
+    data = np.squeeze(data)
+    x = np.arange(data.shape[-1])
+
+    if data.ndim == 2:
+      y = np.nanmean(data, axis=0)
+      err = np.nanstd(data, axis=0)
+      plt.fill_between(x, y - err, y + err,
+                       color=colors[task_id], alpha=.2)
+    else:
+      y = data
+
+    plt.plot(x, y, c=colors[task_id], label=task_id,
+             marker='o' if len(y) == 1 else None)
+
+  plt.legend(loc='best')
+
+  if ceiling is not None:
+    ax.axhline(ceiling, color='k', linestyle=':', linewidth=.75)
+
+  # Add labels.
+  if xticks is not None:
+    plt.xticks(xticks)
+  plt.xlabel(xlabel)
+  plt.ylabel(ylabel)
+  plt.tight_layout()
+  plt.close()
 
   return fig, ax
