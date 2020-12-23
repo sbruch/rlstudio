@@ -86,8 +86,9 @@ class StatePointEstimate:
   def render_bins(self, bins: Dict[ObservationId, str],
                   episodes: List[EpisodeId],
                   xticklabels: List[str],
-                  xlabel: str, ylabel: str):
-    return render_bins(self.stats, bins, episodes, xticklabels, xlabel, ylabel)
+                  xlabel: str, ylabel: str, xscale=1):
+    return render_bins(self.stats, bins, episodes, xticklabels,
+                       xlabel, ylabel, xscale=xscale)
 
   def is_compatible(self, other) -> bool:
     if not isinstance(other, StatePointEstimate):
@@ -113,7 +114,7 @@ def render_bins(stats: Dict[ObservationId, point_estimate.PointEstimate],
                 bins: Dict[ObservationId, str],
                 episodes: List[EpisodeId],
                 xticklabels: List[str],
-                xlabel: str, ylabel: str):
+                xlabel: str, ylabel: str, xscale=1):
   """Renders statistics for a given set of episodes grouped by the given bins.
 
   Args:
@@ -123,6 +124,7 @@ def render_bins(stats: Dict[ObservationId, point_estimate.PointEstimate],
     xticklabels: Tick labels on the x-axis.
     xlabel: Label for the x axis.
     ylabel: Label for the y axis.
+    xscale: Scales ticks on x axis.
 
   Returns:
     A dictionary from plot identifier to a tuple containing
@@ -187,7 +189,7 @@ def render_bins(stats: Dict[ObservationId, point_estimate.PointEstimate],
         x = np.arange(len(xticklabels))
         plt.fill_between(x, means - stds, means + stds,
                          color=colors[episode], alpha=.2)
-        plt.plot(x, means, label=f'Time {episode}', c=colors[episode])
+        plt.plot(x, means, label=f'Time {episode*xscale}', c=colors[episode])
 
       for episode in episodes:
         _plot_episode(episode)
