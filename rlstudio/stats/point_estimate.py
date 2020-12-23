@@ -3,6 +3,7 @@ from rlstudio.experiment import base as exp_base
 import matplotlib.pyplot as plt
 import numpy as np
 from typing import List
+import warnings
 
 
 class PointEstimate:
@@ -129,8 +130,10 @@ def render_sequential(stats: np.ndarray,
       x = np.arange(current_x, current_x + data.shape[-1])
 
       if data.ndim == 2:
-        y = np.nanmean(data, axis=0)
-        err = np.nanstd(data, axis=0)
+        with warnings.catch_warnings():
+          warnings.simplefilter("ignore", category=RuntimeWarning)
+          y = np.nanmean(data, axis=0)
+          err = np.nanstd(data, axis=0)
         plt.fill_between(x, y - err, y + err,
                          color=colors[task_id], alpha=.2)
       else:
@@ -205,8 +208,10 @@ def render_compact(stats: np.ndarray,
     x = np.arange(data.shape[-1])
 
     if data.ndim == 2:
-      y = np.nanmean(data, axis=0)
-      err = np.nanstd(data, axis=0)
+      with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        y = np.nanmean(data, axis=0)
+        err = np.nanstd(data, axis=0)
       plt.fill_between(x, y - err, y + err,
                        color=colors[task_id], alpha=.2)
     else:
