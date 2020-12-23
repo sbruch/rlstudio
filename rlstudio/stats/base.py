@@ -21,3 +21,7 @@ class Summary:
                       timestep: env_base.TimeStep,
                       decision: agent_base.Decision) -> None:
     """Records an agent's decision."""
+
+  @abc.abstractmethod
+  def commit_episode(self) -> None:
+    """Finalizes data for the preceding episode.."""
