@@ -1,6 +1,7 @@
+from rlstudio.experiment import base as exp_base
+
 import matplotlib.pyplot as plt
 import numpy as np
-from rlstudio.experiment import base as exp_base
 from typing import List
 
 

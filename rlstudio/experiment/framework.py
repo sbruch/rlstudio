@@ -61,7 +61,7 @@ class Experiment:
         for episode in range(self.config.test_episodes):
           time += 1
           metadata = exp_base.EvaluationMetadata(
-            self.run_id, time, task.id(), round_id, episode_id)
+            self.run_id, time, task.id(), round_id, episode)
           returns = self._eval(metadata, summary, task)
           print(f'Tested agent on task {task.id()}: Total return is {returns:.2f}')
 
