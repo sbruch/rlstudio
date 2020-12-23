@@ -76,11 +76,11 @@ class StatePointEstimate:
     return render_heatmap(self.stats, sorted_observations,
                           observation_labels, xlabel, ylabel, specials)
 
-  def render_compact(self, xlabel: str, ylabel: str, ceiling: float = None):
+  def render_compact(self, xlabel: str, ylabel: str, ceiling: float = None, xscale=1):
     """Returns a dict from observation ID to a tuple of matplotlib Figure and Axes."""
     values = {}
     for observation_id, stats in self.stats.items():
-      values[observation_id] = stats.render_compact(xlabel, ylabel, ceiling)
+      values[observation_id] = stats.render_compact(xlabel, ylabel, ceiling, xscale=xscale)
     return values
 
   def render_bins(self, bins: Dict[ObservationId, str],
@@ -187,7 +187,7 @@ def render_bins(stats: Dict[ObservationId, point_estimate.PointEstimate],
         x = np.arange(len(xticklabels))
         plt.fill_between(x, means - stds, means + stds,
                          color=colors[episode], alpha=.2)
-        plt.plot(x, means, label=f'Episode {episode}', c=colors[episode])
+        plt.plot(x, means, label=f'Time {episode}', c=colors[episode])
 
       for episode in episodes:
         _plot_episode(episode)
@@ -289,6 +289,8 @@ def render_heatmap(stats: Dict[ObservationId, point_estimate.PointEstimate],
     # Labels, title, and ticks.
     ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
+    ax.tick_params(axis=u'x', which=u'major', bottom=False,
+                   top=False, labelbottom=False)
     ax.set_yticks(yticks)
     ax.set_yticklabels(yticklabels, ha='center')
     ax.tick_params(axis=u'y', which=u'both', length=0, pad=15)

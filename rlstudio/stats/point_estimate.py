@@ -40,11 +40,15 @@ class PointEstimate:
     run = metadata.run_id % self.nruns
     self.stats[run, r, t, h] = estimate
 
-  def render_sequential(self, xlabel: str, ylabel: str, ceiling: float = None):
-    return render_sequential(self.stats, self.task_ids, xlabel, ylabel, ceiling=ceiling)
+  def render_sequential(self, xlabel: str, ylabel: str,
+                        ceiling: float = None, xscale=1):
+    return render_sequential(self.stats, self.task_ids, xlabel, ylabel,
+                             ceiling=ceiling, xscale=xscale)
 
-  def render_compact(self, xlabel: str, ylabel: str, ceiling: float = None):
-    return render_compact(self.stats, self.task_ids, xlabel, ylabel, ceiling=ceiling)
+  def render_compact(self, xlabel: str, ylabel: str,
+                     ceiling: float = None, xscale=1):
+    return render_compact(self.stats, self.task_ids, xlabel, ylabel,
+                          ceiling=ceiling, xscale=xscale)
 
   def is_compatible(self, other) -> bool:
     if not isinstance(other, PointEstimate):
@@ -87,7 +91,7 @@ def unify(points: List[PointEstimate]) -> PointEstimate:
 def render_sequential(stats: np.ndarray,
                       task_ids: List[str],
                       xlabel: str, ylabel: str,
-                      xticks=None, ceiling=None):
+                      xticks=None, ceiling=None, xscale=1):
   """Renders the statistics accumulated in `stats` one task at a time.
 
   Args:
@@ -98,6 +102,7 @@ def render_sequential(stats: np.ndarray,
     xticks: Optional xticks. Computed automatically if not given.
     ceiling: Optional maximum value achievable. A dashed horizontal line
         is plotted to highlight this value.
+    xscale: Scales ticks on x axis.
 
   Returns:
     A tuple containing `matplotlib.figure.Figure` and `matplotlib.axes.Axes`.
@@ -127,7 +132,7 @@ def render_sequential(stats: np.ndarray,
   for round_id in range(nrounds):
     for task_idx, task_id in enumerate(task_ids):
       data = np.squeeze(stats[:, round_id, task_idx, :])
-      x = np.arange(current_x, current_x + data.shape[-1])
+      x = np.arange(current_x, current_x + data.shape[-1]) * xscale
 
       if data.ndim == 2:
         with warnings.catch_warnings():
@@ -166,7 +171,7 @@ def render_sequential(stats: np.ndarray,
 def render_compact(stats: np.ndarray,
                    task_ids: List[str],
                    xlabel: str, ylabel: str,
-                   xticks=None, ceiling=None):
+                   xticks=None, ceiling=None, xscale=1):
   """Renders the statistics accumulated in `stats` in a compact plot.
 
   Args:
@@ -177,6 +182,7 @@ def render_compact(stats: np.ndarray,
     xticks: Optional xticks. Computed automatically if not given.
     ceiling: Optional maximum value achievable. A dashed horizontal line
         is plotted to highlight this value.
+    xscale: Scales ticks on x axis.
 
   Returns:
     A tuple containing `matplotlib.figure.Figure` and `matplotlib.axes.Axes`.
@@ -205,7 +211,7 @@ def render_compact(stats: np.ndarray,
   for task_idx, task_id in enumerate(task_ids):
     data = stats[:, :, task_idx, :].reshape((nruns, -1))
     data = np.squeeze(data)
-    x = np.arange(data.shape[-1])
+    x = np.arange(data.shape[-1]) * xscale
 
     if data.ndim == 2:
       with warnings.catch_warnings():
