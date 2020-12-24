@@ -1,7 +1,7 @@
 from rlstudio.environment import base as env_base
 from rlstudio.experiment import base as exp_base
 from rlstudio.stats import point_estimate
-from rlstudio.typing import EpisodeId, ObservationId, ObservationType
+from rlstudio.typing import EpisodeId, ObservationId, ObservationType, TaskId
 
 import matplotlib
 import matplotlib.pyplot as plt
@@ -16,7 +16,7 @@ class StatePointEstimate:
                id: str,
                observation_type: ObservationType,
                observation_ids: List[ObservationId],
-               task_ids: List[str],
+               task_ids: List[TaskId],
                horizon: int,
                nrounds: int,
                nruns: int):

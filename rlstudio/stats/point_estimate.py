@@ -1,4 +1,5 @@
 from rlstudio.experiment import base as exp_base
+from rlstudio.typing import TaskId
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -10,7 +11,7 @@ class PointEstimate:
   """Records point estimates such as returns."""
   def __init__(self,
                id: str,
-               task_ids: List[str],
+               task_ids: List[TaskId],
                horizon: int,
                nrounds: int,
                nruns: int):
