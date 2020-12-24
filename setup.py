@@ -16,6 +16,8 @@ setup(
         'rlax>=0.0.2',
         'optax>=0.0.1',
         'dm-haiku>=0.0.2',
+        'pyrcca>=0.1',
+        'scikit-learn>=0.23.2',
     ],
     license='MIT',
     packages=find_namespace_packages(include=['rlstudio', 'rlstudio.*']),
