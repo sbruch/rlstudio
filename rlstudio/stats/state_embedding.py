@@ -5,7 +5,7 @@ from rlstudio.typing import ObservationId, ObservationType, TaskId
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn import manifold, metrics
+from sklearn import decomposition, manifold, metrics
 from typing import Dict, List
 
 EmbeddingCollection=List['EmbeddingMatrix']
@@ -117,6 +117,61 @@ class EmbeddingMatrix:
     return fig, ax
 
 
+def pca(
+    training: EmbeddingCollection,
+    test: EmbeddingCollection,
+    ncomponents: int):
+  """Applies PCA to extract principal components.
+
+  Args:
+    training: A collection of `EmbeddingMatrix` objects used to train PCA.
+    test: A collection of `EmbeddingMatrix` objects used for testing.
+    ncomponents: Number of components (>=1) or percentage of variance (<1) to keep.
+  """
+  # Validate the arguments.
+  if len(training) == 0:
+    raise ValueError(f'No embedding matrix found for training')
+  for em in training[1:]:
+    if not training[0].is_compatible(em):
+      raise ValueError(f'Training embedding matrices are not compatible with each other')
+  if test is not None:
+    for em in test:
+      if not training[0].is_compatible(em):
+        raise ValueError(f'Test embedding matrices are not compatible with training matrices')
+
+  ncomponents = min(ncomponents, training[0].dim)
+
+  def _apply(collection, transform_fn):
+    # Prepare datasets for PCA.
+    items = collection[0].items
+    matrix = np.zeros((len(collection) * items, collection[0].dim))
+    for i, em in enumerate(collection):
+      matrix[i*items:(i+1)*items] = em.matrix
+
+    # Apply PCA.
+    pcs = transform_fn(matrix)
+
+    # Create a new collection of EmbeddingMatrix objects.
+    pc_collection: EmeddingCollection = []
+    for i in range(len(collection)):
+      em = EmbeddingMatrix(items, pcs.shape[-1])
+      em.matrix = pcs[i*items:(i+1)*items]
+      pc_collection.append(em)
+
+    return pc_collection
+
+  # Training data.
+  pca = decomposition.PCA(n_components=ncomponents)
+  training_pc_collection = _apply(training, pca.fit_transform)
+
+  if test is None or len(test) == 0:
+    return training_pc_collection
+
+  # Test data.
+  test_pc_collection = _apply(test, pca.transform)
+  return (training_pc_collection, test_pc_collection)
+
+
 def render_components(
     matrices: Dict[str, EmbeddingCollection],
     ncomponents: int,
@@ -202,7 +257,7 @@ def render_components(
     plt.legend(loc='best')
     plt.tight_layout()
     plt.close()
-    figures[component] = (fig, ax)
+    figures[f'{component}'] = (fig, ax)
 
   return figures
 
