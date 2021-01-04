@@ -8,6 +8,8 @@ import numpy as np
 from sklearn import manifold, metrics
 from typing import Dict, List
 
+EmbeddingCollection=List['EmbeddingMatrix']
+
 
 class EmbeddingMatrix:
   """An embedding matrix where each row is the representation of an item."""
@@ -114,94 +116,95 @@ class EmbeddingMatrix:
     plt.close()
     return fig, ax
 
-  def render_components(
-      matrices: Dict[str, List['EmbeddingMatrix']],
-      ncomponents: int,
-      labels: List[str],
-      xlabel: str, ylabel: str,
-      specials: Dict[int, str]=None):
-    """Renders the first `ncomponents` components of the embedding matrices.
 
-    Args:
-      matrices: A mapping from an identifier to a list of `EmbeddingMatrix`.
-          Embedding matrices must be compatible (i.e., have equal dimension and number of items).
-          For every item, the component value is averaged over the list of embedding matrices.
-      ncomponents: The number of components to render.
-      labels: List of labels for every item.
-      xlabel: Label for the x axis.
-      ylabel: Label for the y axis.
-      specials: Mapping from special item indices to a color. These items will
-          be marked in the final plot.
+def render_components(
+    matrices: Dict[str, EmbeddingCollection],
+    ncomponents: int,
+    labels: List[str],
+    xlabel: str, ylabel: str,
+    specials: Dict[int, str]=None):
+  """Renders the first `ncomponents` components of the embedding matrices.
 
-    Returns:
-      A dictionary from plot identifier to a tuple containing
-          `matplotlib.figure.Figure` and `matplotlib.axes.Axes`.
-    """
-    # Validate the arguments.
+  Args:
+    matrices: A mapping from an identifier to a collection of `EmbeddingMatrix`.
+        All embedding matrices (within and across identifiers) must be compatible (i.e.,
+        have equal dimension and number of items).
+        For every identifier, the component value is averaged over its collection of embedding matrices.
+    ncomponents: The number of components to render.
+    labels: List of labels for every row of the matrix.
+    xlabel: Label for the x axis.
+    ylabel: Label for the y axis.
+    specials: Mapping from the index of special rows to a color, to be marked in the final plot.
+
+  Returns:
+    A dictionary from plot identifier to a tuple containing
+        `matplotlib.figure.Figure` and `matplotlib.axes.Axes`.
+  """
+  # Validate the arguments.
+  for id, ems in matrices.items():
+    if len(ems) == 0:
+      raise ValueError(f'No embedding matrix found for {id}')
+    for em in ems[1:]:
+      if not ems[0].is_compatible(em):
+        raise ValueError(f'Embedding matrices for "{id}" are not compatible with each other')
+    if len(labels) != ems[0].items:
+      raise ValueError(f'Expected {ems[0].items} labels but got {len(labels)}')
+
+    ncomponents = min(ncomponents, ems[0].dim)
+
+  # Find unique labels.
+  labels = np.array(labels)
+  _, indices = np.unique(labels, return_index=True)
+  unique_labels = [labels[i] for i in indices]
+
+  dividers = [d - .5 for d in indices]
+  gaps = np.append(dividers, len(labels) - .5)
+  gaps = (gaps[1:] - gaps[:-1]) / 2.
+  xticks = dividers + gaps
+
+  # Build a color map.
+  cmap = iter(plt.cm.rainbow(np.linspace(0, 1, len(matrices))))
+  colors = {}
+  for id in matrices.keys():
+    colors[id] = next(cmap)
+
+  # Generate figures.
+  figures = {}
+  for component in range(ncomponents):
+    fig, ax = plt.subplots()
+
     for id, ems in matrices.items():
-      if len(ems) == 0:
-        raise ValueError(f'No embedding matrix found for {id}')
+      data = np.expand_dims(ems[0].matrix[:, component], axis=1)
       for em in ems[1:]:
-        if not ems[0].is_compatible(em):
-          raise ValueError(f'Embedding matrices for "{id}" are not compatible with each other')
-      if len(labels) != ems[0].items:
-        raise ValueError(f'Expected {ems[0].items} labels but got {len(labels)}')
+        data = np.concatenate(
+          [data, np.expand_dims(em.matrix[:, component], axis=1)],
+          axis=1)
+      y = np.mean(data, axis=1)
+      std = np.std(data, axis=1)
 
-      ncomponents = min(ncomponents, ems[0].dim)
+      ax.plot(np.arange(y.shape[0]), y, label=id, c=colors[id])
+      ax.fill_between(np.arange(y.shape[0]), y - std, y + std,
+                      color=colors[id], alpha=.2)
 
-    # Find unique labels.
-    labels = np.array(labels)
-    _, indices = np.unique(labels, return_index=True)
-    unique_labels = [labels[i] for i in indices]
+    ax.set_xlim(-.5, len(labels))
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(unique_labels, ha='center')
+    ax.tick_params(axis=u'x', which=u'both', length=0, pad=15)
+    for position in dividers:
+      ax.axvline(position, color='k', linestyle=':', linewidth=.1)
 
-    dividers = [d - .5 for d in indices]
-    gaps = np.append(dividers, len(labels) - .5)
-    gaps = (gaps[1:] - gaps[:-1]) / 2.
-    xticks = dividers + gaps
+    if specials is not None:
+      for x, c in specials.items():
+        ax.axvspan(x - .5, x + .5, color=c, alpha=.1)
 
-    # Build a color map.
-    cmap = iter(plt.cm.rainbow(np.linspace(0, 1, len(matrices))))
-    colors = {}
-    for id in matrices.keys():
-      colors[id] = next(cmap)
+    plt.legend(loc='best')
+    plt.tight_layout()
+    plt.close()
+    figures[component] = (fig, ax)
 
-    # Generate figures.
-    figures = {}
-    for component in range(ncomponents):
-      fig, ax = plt.subplots()
-
-      for id, ems in matrices.items():
-        data = np.expand_dims(ems[0].matrix[:, component], axis=1)
-        for em in ems[1:]:
-          data = np.concatenate(
-            [data, np.expand_dims(em.matrix[:, component], axis=1)],
-            axis=1)
-        y = np.mean(data, axis=1)
-        std = np.std(data, axis=1)
-
-        ax.plot(np.arange(y.shape[0]), y, label=id, c=colors[id])
-        ax.fill_between(np.arange(y.shape[0]), y - std, y + std,
-                        color=colors[id], alpha=.2)
-
-      ax.set_xlim(-.5, len(labels))
-      ax.set_xlabel(xlabel)
-      ax.set_ylabel(ylabel)
-      ax.set_xticks(xticks)
-      ax.set_xticklabels(unique_labels, ha='center')
-      ax.tick_params(axis=u'x', which=u'both', length=0, pad=15)
-      for position in dividers:
-        ax.axvline(position, color='k', linestyle=':', linewidth=.1)
-
-      if specials is not None:
-        for x, c in specials.items():
-          ax.axvspan(x - .5, x + .5, color=c, alpha=.1)
-
-      plt.legend(loc='best')
-      plt.tight_layout()
-      plt.close()
-      figures[component] = (fig, ax)
-
-    return figures
+  return figures
 
 
 class TaskEmbeddings(EmbeddingMatrix):
