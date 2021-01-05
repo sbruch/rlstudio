@@ -55,7 +55,11 @@ class StatePointEstimate:
              metadata: exp_base.EvaluationMetadata,
              timestep: env_base.TimeStep,
              estimate: float) -> None:
-    """Records an estimate into the buffer."""
+    """Records an estimate into the buffer.
+
+    Once all data associated with a particular `metadata` have been recorded,
+    `commit()` must be called to finalize its accumulated batch of data.
+    """
     if (self.observation_type != timestep.observation_type or
         timestep.observation_id not in self.stats):
       return
@@ -69,26 +73,12 @@ class StatePointEstimate:
         stats.record(metadata, np.mean(b))
       self.buffer[observation_id].clear()
 
-  def render_heatmap(self, sorted_observations: List[ObservationId],
-                     observation_labels: List[str],
-                     xlabel: str, ylabel: str,
-                     specials: Dict[ObservationId, str]=None):
-    return render_heatmap(self.stats, sorted_observations,
-                          observation_labels, xlabel, ylabel, specials)
-
   def render_compact(self, xlabel: str, ylabel: str, ceiling: float = None, xscale=1):
     """Returns a dict from observation ID to a tuple of matplotlib Figure and Axes."""
     values = {}
     for observation_id, stats in self.stats.items():
       values[observation_id] = stats.render_compact(xlabel, ylabel, ceiling, xscale=xscale)
     return values
-
-  def render_bins(self, bins: Dict[ObservationId, str],
-                  episodes: List[EpisodeId],
-                  xticklabels: List[str],
-                  xlabel: str, ylabel: str, xscale=1):
-    return render_bins(self.stats, bins, episodes, xticklabels,
-                       xlabel, ylabel, xscale=xscale)
 
   def is_compatible(self, other) -> bool:
     if not isinstance(other, StatePointEstimate):
@@ -108,6 +98,203 @@ class StatePointEstimate:
         return False
 
     return True
+
+  def render_bins(self, bins: Dict[ObservationId, str],
+                  episodes: List[EpisodeId],
+                  xticklabels: List[str],
+                  xlabel: str, ylabel: str, xscale=1):
+    """Renders statistics for a given set of episodes grouped by the given bins.
+
+    Args:
+      bins: Dictionary mapping an observation ID to a bin.
+      episodes: A list of episodes whose data to render.
+      xticklabels: Tick labels on the x-axis.
+      xlabel: Label for the x axis.
+      ylabel: Label for the y axis.
+      xscale: Scales ticks on x axis.
+
+    Returns:
+      A dictionary from plot identifier to a tuple containing
+          `matplotlib.figure.Figure` and `matplotlib.axes.Axes`.
+    """
+    if not np.array_equal(self.stats.keys(), bins.keys()):
+      raise ValueError('Unexpected keys in `bins`: '
+                       f'{self.stats.keys()} vs. {bins.keys()}')
+    unique_bins = np.unique([bins[o] for o in bins.keys()])
+    if len(xticklabels) != len(unique_bins):
+      raise ValueError(f'Insufficient number of xticklabels: got {len(xticklabels)} but '
+                       f'expected {len(unique_bins)}')
+    if len(episodes) == 0 or len(self.stats) == 0:
+      return {}
+
+    for episode in episodes:
+      if episode < 0 or episode >= self.horizon:
+        raise ValueError(f'Requested episode {episode} is out of range')
+
+    # Construct a color map.
+    cmap = iter(plt.cm.rainbow(np.linspace(0, 1, len(episodes))))
+    colors = {}
+    for episode in episodes:
+      colors[episode] = next(cmap)
+
+    # Generate figures, one per (round, task) tuple.
+    figures = {}
+
+    for round in range(self.nrounds):
+      for task_idx, task_id in enumerate(self.task_ids):
+        fig, ax = plt.subplots()
+
+        def _plot_episode(episode):
+          data: List[np.ndarray] = [np.array([]) for _ in xticklabels]
+          for observation, pe in self.stats.items():
+            bin = bins[observation]
+            idx = xticklabels.index(bin)
+            value = np.squeeze(pe.stats[:, round, task_idx, episode]).reshape((-1))
+            data[idx] = np.concatenate([data[idx], value], -1)
+
+          # Compute means and standard deviations for the collected data.
+          means = np.zeros((len(data)))
+          stds = np.zeros_like(means)
+          for idx in range(len(data)):
+            with warnings.catch_warnings():
+              warnings.simplefilter("ignore", category=RuntimeWarning)
+              means[idx] = np.nanmean(data[idx])
+              stds[idx] = np.nanstd(data[idx])
+
+          # Plot.
+          x = np.arange(len(xticklabels))
+          plt.fill_between(x, means - stds, means + stds,
+                           color=colors[episode], alpha=.2)
+          plt.plot(x, means, label=f'Time {episode*xscale}', c=colors[episode])
+
+        for episode in episodes:
+          _plot_episode(episode)
+
+        # Finalize figure.
+        ax.set_xticks(np.arange(len(xticklabels)))
+        ax.set_xticklabels(xticklabels)
+        plt.xlabel(xlabel)
+        plt.ylabel(ylabel)
+        plt.legend(loc='best')
+        plt.tight_layout()
+        plt.close()
+        figures[f'{task_id}_round {round}'] = (fig, ax)
+
+    return figures
+
+  def render_heatmap(self, sorted_observations: List[ObservationId],
+                     observation_labels: List[str],
+                     xlabel: str, ylabel: str,
+                     specials: Dict[ObservationId, str]=None):
+    """Renders statistics as a heatmap.
+
+    Args:
+      sorted_observations: Sorted list of observation IDs.
+      observation_labels: Labels for observation IDs in the order they
+          appear in `sorted_observations`.
+      xlabel: Label for the x axis.
+      ylabel: Label for the y axis.
+      specials: Dictionary containing observation IDs to mark as keys,
+          mapped to a color.
+
+    Returns:
+      A dictionary from plot identifier to a tuple containing
+          `matplotlib.figure.Figure` and `matplotlib.axes.Axes`.
+    """
+    if len(observation_labels) != len(sorted_observations):
+      raise ValueError('Expected one label per observation')
+
+    # Find minimum and maximum values.
+    vmin = None
+    vmax = None
+    for _, pe in self.stats.items():
+      _vmin = np.nanmin(pe.stats)
+      _vmax = np.nanmax(pe.stats)
+      vmin = _vmin if vmin is None else min(vmin, _vmin)
+      vmax = _vmax if vmax is None else max(vmax, _vmax)
+
+    # Make vmin and vmax symmetrical around 0.
+    if vmin < 0 and vmax > 0:
+      if abs(vmin) < abs(vmax):
+        vmin = -vmax
+      else:
+        vmax = -vmin
+
+    # Find ytick positions.
+    yticklabels, indices = np.unique(observation_labels, return_index=True)
+    indices = sorted(indices)
+    yticklabels = [observation_labels[t] for t in indices]
+
+    ydividers = [d - .5 for d in indices]
+    gaps = np.append(ydividers, len(observation_labels) - .5)
+    gaps = (gaps[1:] - gaps[:-1]) / 2.
+    yticks = ydividers + gaps
+
+    # Plot one figure per task.
+    figures = {}
+    for task_idx, task_id in enumerate(self.task_ids):
+      image = np.zeros((len(sorted_observations), self.nrounds * self.horizon))
+      for observation, pe in self.stats.items():
+        row = sorted_observations.index(observation)
+        with warnings.catch_warnings():
+          warnings.simplefilter("ignore", category=RuntimeWarning)
+          image[row] = np.nanmean(pe.stats[:, :, task_idx, :],
+                                  axis=0).reshape((image.shape[-1]))
+
+      fig, ax = plt.subplots(figsize=(8, 6))
+      imshow = ax.imshow(image, interpolation='none',
+                         cmap='RdBu', origin='upper',
+                         vmin=vmin, vmax=vmax)
+
+      # Labels, title, and ticks.
+      ax.set_xlabel(xlabel)
+      ax.set_ylabel(ylabel)
+      ax.tick_params(axis=u'x', which=u'major', bottom=False,
+                     top=False, labelbottom=False)
+      ax.set_yticks(yticks)
+      ax.set_yticklabels(yticklabels, ha='center')
+      ax.tick_params(axis=u'y', which=u'both', length=0, pad=15)
+      for position in ydividers:
+        ax.axhline(position, color='k', linestyle='-', linewidth=.5)
+
+      # Add dividers to the x axis.
+      if self.nrounds > 1:
+        minor_ticks = []
+        x = 0
+        for _ in range(self.nrounds):
+          minor_ticks.append(x + self.horizon / 2)
+          x += self.horizon
+          ax.axvline(x - .5, color='k', linestyle='-', linewidth=.5)
+
+        ax.set_xticks(minor_ticks, minor=True)
+        ax.set_xticklabels([f'Round {i+1}' for i, _ in enumerate(minor_ticks)],
+                           minor=True, ha='center')
+        ax.tick_params(axis=u'x', which=u'minor', pad=25)
+
+      # Update aspect ratio.
+      _, xmax = ax.get_xlim()
+      ratio = xmax / len(sorted_observations)
+      if ratio < 1:
+        ratio = 1
+      ax.set_aspect(ratio)
+
+      # Add markers if requested.
+      if specials is not None:
+        x = 0
+        for _ in range(self.nrounds):
+          for observation, color in specials.items():
+            y = sorted_observations.index(observation)
+            ax.add_artist(matplotlib.patches.Ellipse(
+              (x-.6, y), width=.3 * ratio, height=.3,
+              color=color, clip_on=False))
+          x += self.horizon
+
+      fig.colorbar(imshow, shrink=.3)
+      plt.tight_layout()
+      plt.close()
+      figures[task_id] = (fig, ax)
+
+    return figures
 
   def render_violin(self,
                     sorted_observations: List[ObservationId],
@@ -248,235 +435,6 @@ class StatePointEstimate:
     plt.close()
 
     return fig, ax
-
-
-def render_bins(stats: Dict[ObservationId, point_estimate.PointEstimate],
-                bins: Dict[ObservationId, str],
-                episodes: List[EpisodeId],
-                xticklabels: List[str],
-                xlabel: str, ylabel: str, xscale=1):
-  """Renders statistics for a given set of episodes grouped by the given bins.
-
-  Args:
-    stats: Dictionary of `PointEstimate` keyed by observation IDs.
-    bins: Dictionary mapping an observation ID to a bin.
-    episodes: A list of episodes whose data to render.
-    xticklabels: Tick labels on the x-axis.
-    xlabel: Label for the x axis.
-    ylabel: Label for the y axis.
-    xscale: Scales ticks on x axis.
-
-  Returns:
-    A dictionary from plot identifier to a tuple containing
-        `matplotlib.figure.Figure` and `matplotlib.axes.Axes`.
-  """
-  if not np.array_equal(stats.keys(), bins.keys()):
-    raise ValueError('Keys in the `stats` and `bins` maps should match: '
-                     f'{stats.keys()} vs. {bins.keys()}')
-  unique_bins = np.unique([bins[o] for o in bins.keys()])
-  if len(xticklabels) != len(unique_bins):
-    raise ValueError(f'Insufficient number of xticklabels: got {len(xticklabels)} but '
-                     f'expected {len(unique_bins)}')
-  if len(episodes) == 0 or len(stats) == 0:
-    return {}
-
-  # Validate `PointEstimate`s.
-  reference_observation = None
-  reference = None
-  for observation, pe in stats.items():
-    if reference is None:
-      reference_observation = observation
-      reference = pe
-      continue
-    if not reference.is_compatible(pe):
-      raise ValueError(f'PointEstimates for {reference_observation} and {observation} '
-                       'are incompatible')
-  for episode in episodes:
-    if episode < 0 or episode >= reference.horizon:
-      raise ValueError(f'Requested episode {episode} is out of range')
-
-  # Construct a color map.
-  cmap = iter(plt.cm.rainbow(np.linspace(0, 1, len(episodes))))
-  colors = {}
-  for episode in episodes:
-    colors[episode] = next(cmap)
-
-  # Generate figures, one per (round, task) tuple.
-  figures = {}
-
-  for round in range(reference.nrounds):
-    for task_idx, task_id in enumerate(reference.task_ids):
-      fig, ax = plt.subplots()
-  
-      def _plot_episode(episode):
-        data: List[np.ndarray] = [np.array([]) for _ in xticklabels]
-        for observation, pe in stats.items():
-          bin = bins[observation]
-          idx = xticklabels.index(bin)
-          value = np.squeeze(pe.stats[:, round, task_idx, episode]).reshape((-1))
-          data[idx] = np.concatenate([data[idx], value], -1)
-
-        # Compute means and standard deviations for the collected data.
-        means = np.zeros((len(data)))
-        stds = np.zeros_like(means)
-        for idx in range(len(data)):
-          with warnings.catch_warnings():
-            warnings.simplefilter("ignore", category=RuntimeWarning)
-            means[idx] = np.nanmean(data[idx])
-            stds[idx] = np.nanstd(data[idx])
-
-        # Plot.
-        x = np.arange(len(xticklabels))
-        plt.fill_between(x, means - stds, means + stds,
-                         color=colors[episode], alpha=.2)
-        plt.plot(x, means, label=f'Time {episode*xscale}', c=colors[episode])
-
-      for episode in episodes:
-        _plot_episode(episode)
-
-      # Finalize figure.
-      ax.set_xticks(np.arange(len(xticklabels)))
-      ax.set_xticklabels(xticklabels)
-      plt.xlabel(xlabel)
-      plt.ylabel(ylabel)
-      plt.legend(loc='best')
-      plt.tight_layout()
-      plt.close()
-      figures[f'{task_id}_round {round}'] = (fig, ax)
-
-  return figures
-
-
-def render_heatmap(stats: Dict[ObservationId, point_estimate.PointEstimate],
-                   sorted_observations: List[ObservationId],
-                   observation_labels: List[str],
-                   xlabel: str, ylabel: str,
-                   specials: Dict[ObservationId, str]=None):
-  """Renders statistics as a heatmap.
-
-  Args:
-    stats: Dictionary of `PointEstimate` keyed by observation IDs.
-    sorted_observations: Sorted list of observation IDs.
-    observation_labels: Labels for observation IDs in the order they
-        appear in `sorted_observations`.
-    xlabel: Label for the x axis.
-    ylabel: Label for the y axis.
-    specials: Dictionary containing observation IDs to mark as keys,
-        mapped to a color.
-
-  Returns:
-    A dictionary from plot identifier to a tuple containing
-        `matplotlib.figure.Figure` and `matplotlib.axes.Axes`.
-  """
-  if len(observation_labels) != len(sorted_observations):
-    raise ValueError('Expected one label per observation')
-
-  if len(stats) == 0:
-    return {}
-
-  # Validate `PointEstimate`s.
-  reference_observation = None
-  reference = None
-  for observation, pe in stats.items():
-    if reference is None:
-      reference_observation = observation
-      reference = pe
-      continue
-    if not reference.is_compatible(pe):
-      raise ValueError(f'PointEstimates for {reference_observation} and {observation} '
-                       'are incompatible')
-
-  # Find minimum and maximum values.
-  vmin = None
-  vmax = None
-  for _, pe in stats.items():
-    _vmin = np.nanmin(pe.stats)
-    _vmax = np.nanmax(pe.stats)
-    vmin = _vmin if vmin is None else min(vmin, _vmin)
-    vmax = _vmax if vmax is None else max(vmax, _vmax)
-
-  # Make vmin and vmax symmetrical around 0.
-  if vmin < 0 and vmax > 0:
-    if abs(vmin) < abs(vmax):
-      vmin = -vmax
-    else:
-      vmax = -vmin
-
-  # Find ytick positions.
-  yticklabels, indices = np.unique(observation_labels, return_index=True)
-  indices = sorted(indices)
-  yticklabels = [observation_labels[t] for t in indices]
-
-  ydividers = [d - .5 for d in indices]
-  gaps = np.append(ydividers, len(observation_labels) - .5)
-  gaps = (gaps[1:] - gaps[:-1]) / 2.
-  yticks = ydividers + gaps
-
-  # Plot one figure per task.
-  figures = {}
-  for task_idx, task_id in enumerate(reference.task_ids):
-    image = np.zeros((len(sorted_observations), reference.nrounds * reference.horizon))
-    for observation, pe in stats.items():
-      row = sorted_observations.index(observation)
-      with warnings.catch_warnings():
-        warnings.simplefilter("ignore", category=RuntimeWarning)
-        image[row] = np.nanmean(pe.stats[:, :, task_idx, :],
-                                axis=0).reshape((image.shape[-1]))
-
-    fig, ax = plt.subplots(figsize=(8, 6))
-    imshow = ax.imshow(image, interpolation='none',
-                       cmap='RdBu', origin='upper',
-                       vmin=vmin, vmax=vmax)
-
-    # Labels, title, and ticks.
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    ax.tick_params(axis=u'x', which=u'major', bottom=False,
-                   top=False, labelbottom=False)
-    ax.set_yticks(yticks)
-    ax.set_yticklabels(yticklabels, ha='center')
-    ax.tick_params(axis=u'y', which=u'both', length=0, pad=15)
-    for position in ydividers:
-      ax.axhline(position, color='k', linestyle='-', linewidth=.5)
-    
-    # Add dividers to the x axis.
-    if reference.nrounds > 1:
-      minor_ticks = []
-      x = 0
-      for _ in range(reference.nrounds):
-        minor_ticks.append(x + reference.horizon / 2)
-        x += reference.horizon
-        ax.axvline(x - .5, color='k', linestyle='-', linewidth=.5)
-
-      ax.set_xticks(minor_ticks, minor=True)
-      ax.set_xticklabels([f'Round {i+1}' for i, _ in enumerate(minor_ticks)],
-                         minor=True, ha='center')
-      ax.tick_params(axis=u'x', which=u'minor', pad=25)
-
-    # Update aspect ratio.
-    _, xmax = ax.get_xlim()
-    ratio = xmax / len(sorted_observations)
-    if ratio < 1:
-      ratio = 1
-    ax.set_aspect(ratio)
-
-    # Add markers if requested.
-    if specials is not None:
-      x = 0
-      for _ in range(reference.nrounds):
-        for observation, color in specials.items():
-          y = sorted_observations.index(observation)
-          ax.add_artist(matplotlib.patches.Ellipse(
-            (x-.6, y), width=.3 * ratio, height=.3,
-            color=color, clip_on=False))
-        x += reference.horizon
-
-    fig.colorbar(imshow, shrink=.3)
-    plt.tight_layout()
-    plt.close()
-    figures[task_id] = (fig, ax)
-
-  return figures
 
 
 def unify(points: List[StatePointEstimate]) -> StatePointEstimate:
