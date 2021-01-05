@@ -118,17 +118,11 @@ class EmbeddingMatrix:
     return fig, ax
 
 
-def pca(
+def _apply_component_analysis(
     training: EmbeddingCollection,
     test: EmbeddingCollection,
-    ncomponents: int):
-  """Applies PCA to extract principal components.
-
-  Args:
-    training: A collection of `EmbeddingMatrix` objects used to train PCA.
-    test: A collection of `EmbeddingMatrix` objects used for testing.
-    ncomponents: Number of components (>=1) or percentage of variance (<1) to keep.
-  """
+    ncomponents: int,
+    analysis='pca'):
   # Validate the arguments.
   if len(training) == 0:
     raise ValueError(f'No embedding matrix found for training')
@@ -143,34 +137,66 @@ def pca(
   ncomponents = min(ncomponents, training[0].dim, training[0].items)
 
   def _apply(collection, transform_fn):
-    # Prepare datasets for PCA.
+    # Prepare datasets for analysis.
     items = collection[0].items
     matrix = np.zeros((len(collection) * items, collection[0].dim))
     for i, em in enumerate(collection):
       matrix[i*items:(i+1)*items] = em.matrix
 
-    # Apply PCA.
-    pcs = transform_fn(matrix)
+    # Apply analysis.
+    components = transform_fn(matrix)
 
     # Create a new collection of EmbeddingMatrix objects.
-    pc_collection: EmeddingCollection = []
+    comp_collection: EmeddingCollection = []
     for i in range(len(collection)):
-      em = EmbeddingMatrix(items, pcs.shape[-1])
-      em.matrix = pcs[i*items:(i+1)*items]
-      pc_collection.append(em)
+      em = EmbeddingMatrix(items, components.shape[-1])
+      em.matrix = components[i*items:(i+1)*items]
+      comp_collection.append(em)
 
-    return pc_collection
+    return comp_collection
 
   # Training data.
-  _pca = decomposition.PCA(n_components=ncomponents)
-  training_pc_collection = _apply(training, _pca.fit_transform)
+  if analysis == 'ica':
+    engine = decomposition.FastICA(n_components=ncomponents)
+  else:
+    engine = decomposition.PCA(n_components=ncomponents)
+
+  training_comp_collection = _apply(training, engine.fit_transform)
 
   if test is None or len(test) == 0:
-    return training_pc_collection
+    return training_comp_collection
 
   # Test data.
-  test_pc_collection = _apply(test, _pca.transform)
-  return (training_pc_collection, test_pc_collection)
+  test_comp_collection = _apply(test, engine.transform)
+  return (training_comp_collection, test_comp_collection)
+
+
+def pca(
+    training: EmbeddingCollection,
+    test: EmbeddingCollection,
+    ncomponents: int):
+  """Applies PCA to extract principal components.
+
+  Args:
+    training: A collection of `EmbeddingMatrix` objects used to train PCA.
+    test: A collection of `EmbeddingMatrix` objects used for testing.
+    ncomponents: Number of components (>=1) or percentage of variance (<1) to keep.
+  """
+  return _apply_component_analysis(training, test, ncomponents, 'pca')
+
+
+def ica(
+    training: EmbeddingCollection,
+    test: EmbeddingCollection,
+    ncomponents: int):
+  """Applies ICA to extract principal components.
+
+  Args:
+    training: A collection of `EmbeddingMatrix` objects used to train PCA.
+    test: A collection of `EmbeddingMatrix` objects used for testing.
+    ncomponents: Number of components (>=1) or percentage of variance (<1) to keep.
+  """
+  return _apply_component_analysis(training, test, ncomponents, 'ica')
 
 
 def cca(
@@ -475,8 +501,7 @@ def render_similarity(matrix: np.ndarray,
         mapped to a color.
 
   Returns:
-    A dictionary from plot identifier to a tuple containing
-        `matplotlib.figure.Figure` and `matplotlib.axes.Axes`.
+    A tuple containing `matplotlib.figure.Figure` and `matplotlib.axes.Axes`.
   """
   if matrix.ndim < 2 or matrix.shape[0] != matrix.shape[1]:
     raise ValueError(f'Invalid similarity matrix of shape {matrix.shape}')
