@@ -42,9 +42,9 @@ class PointEstimate:
     self.stats[run, r, t, h] = estimate
 
   def render_sequential(self, xlabel: str, ylabel: str,
-                        ceiling: float = None, xscale=1):
+                        xticks=None, ceiling: float = None, xscale=1):
     return render_sequential(self.stats, self.task_ids, xlabel, ylabel,
-                             ceiling=ceiling, xscale=xscale)
+                             xticks=xticks, ceiling=ceiling, xscale=xscale)
 
   def render_compact(self, xlabel: str, ylabel: str,
                      ceiling: float = None, xscale=1):
