@@ -109,6 +109,146 @@ class StatePointEstimate:
 
     return True
 
+  def render_violin(self,
+                    sorted_observations: List[ObservationId],
+                    observation_labels: List[str],
+                    colors: Dict[ObservationId, str],
+                    xlabel: str, ylabel: str):
+    """Renders statistics as a violin map.
+
+    The resulting figure will have one column per each recorded observation ID.
+    Every column is divided into blocks, each representing a single task.
+    Each column visualizes the distribution of values recorded for that given
+    observation ID, over episodes and tasks.
+
+    Note that, widths are relative and comparable across columns and tasks.
+    Crucially, widths do not represent absolute measurements.
+
+    Args:
+      sorted_observations: Sorted list of observation IDs.
+      observation_labels: Labels for observation IDs in the order they
+          appear in `sorted_observations`.
+      colors: A mapping from observation IDs to colors.
+      xlabel: Label for the x axis.
+      ylabel: Label for the y axis.
+
+    Returns:
+      A tuple of `matplotlib.figure.Figure` and `matplotlib.axes.Axes`.
+    """
+    if not np.array_equal(sorted(sorted_observations), sorted(self.stats.keys())):
+      raise ValueError('List of sorted observations does not match list of recorded observations')
+    if len(observation_labels) != len(sorted_observations):
+      raise ValueError('Expected one label per observation')
+    if len(observation_labels) != len(colors):
+      raise ValueError('Expected one color per observation')
+
+    # The number of points to sample to form distributions.
+    nsamples = 1000
+    std = .04
+
+    # Prepare a figure object.
+    fig, ax = plt.subplots(figsize=(12, 5))
+
+    # Each element contains a distribution for a particular observation ID.
+    collection = [[] for _ in sorted_observations]
+    # Each element contains the max per observation ID.
+    maxima = np.zeros((len(sorted_observations)))
+
+    all_yticklabels= []
+
+    for task_idx, task in enumerate(self.task_ids):
+      for episode in range(self.horizon):
+        # A flag that reflects whether any data was recorded for this episode.
+        episode_missing = True
+        y = len(all_yticklabels)
+
+        for observation_idx, observation_id in enumerate(sorted_observations):
+          data = self.stats[observation_id].stats[:, :, task_idx, episode]
+          if np.isnan(data).all():
+            continue
+          episode_missing = False
+
+          mean = np.nanmean(data)
+          collection[observation_idx].append(
+            np.random.normal(y, std, int(nsamples * mean)))
+          maxima[observation_idx] = max(mean, maxima[observation_idx])
+
+        if not episode_missing:
+          all_yticklabels.append(task)
+
+    # Iterate over the unique set of colors and plot distributions of that color.
+    for color in np.unique([v for _, v in colors.items()]):
+      # A violin plot requires the following variables.
+      dists = []
+      positions = []
+      widths = []
+
+      for observation_idx, observation_id in enumerate(sorted_observations):
+        if colors[observation_id] != color:
+          continue
+
+        # Either a single numpy array or a list of them, each containing samples.
+        samples = collection[observation_idx]
+        if len(samples) == 1:
+          dists.append(samples[0])
+        elif len(samples) > 1:
+          dist = np.concatenate(samples, axis=0)
+          dists.append(dist)
+
+        if len(samples) > 0:
+          positions.append(observation_idx)
+          widths.append(maxima[observation_idx]/np.max(maxima))
+
+      if len(dists) > 0:
+        parts = ax.violinplot(dists, positions, widths=widths,
+                              showextrema=False)
+        for pc in parts['bodies']:
+          pc.set_facecolor(color)
+          pc.set_edgecolor(None)
+          pc.set_alpha(.3)
+
+    # Format the x axis (ticks, labels, title).
+    _, indices = np.unique(observation_labels, return_index=True)
+    indices = sorted(indices)
+    xticklabels = [observation_labels[t] for t in indices]
+
+    xdividers = [d - .5 for d in indices]
+    gaps = np.append(xdividers, len(observation_labels) - .5)
+    gaps = (gaps[1:] - gaps[:-1]) / 2.
+    xticks = xdividers + gaps
+
+    ax.set_xlabel(xlabel)
+    ax.set_xlim(-.5, len(observation_labels))
+    ax.set_xticks(xticks)
+    ax.set_xticklabels(xticklabels, ha='center')
+    ax.tick_params(axis=u'x', which=u'both', length=0, pad=15)
+    for position in xdividers:
+      ax.axvline(position, color='k', linestyle='-', linewidth=.5)
+
+    # Format the y axis (ticks, labels, title).
+    _, indices = np.unique(all_yticklabels, return_index=True)
+    indices = sorted(indices)
+    yticklabels = [all_yticklabels[t] for t in indices]
+
+    ydividers = [d - .5 for d in indices]
+    gaps = np.append(ydividers, len(all_yticklabels) - .5)
+    gaps = (gaps[1:] - gaps[:-1]) / 2.
+    yticks = ydividers + gaps
+
+    ax.set_ylabel(ylabel)
+    ax.set_ylim(-.5, len(all_yticklabels))
+    ax.set_yticks(yticks)
+    ax.tick_params(axis=u'y', which=u'both', length=0, pad=10)
+    ax.set_yticklabels(yticklabels, rotation=90, ha='center')
+    for position in ydividers:
+      ax.axhline(position, color='k', linestyle='-', linewidth=.2)
+
+    # Finalize and close the figure.
+    plt.tight_layout()
+    plt.close()
+
+    return fig, ax
+
 
 def render_bins(stats: Dict[ObservationId, point_estimate.PointEstimate],
                 bins: Dict[ObservationId, str],
@@ -337,6 +477,7 @@ def render_heatmap(stats: Dict[ObservationId, point_estimate.PointEstimate],
     figures[task_id] = (fig, ax)
 
   return figures
+
 
 def unify(points: List[StatePointEstimate]) -> StatePointEstimate:
   """A mechanism to aggregate multiple `StatePointEstimate` objects into one unified object."""
