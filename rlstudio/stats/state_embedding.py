@@ -164,11 +164,11 @@ def _apply_component_analysis(
   training_comp_collection = _apply(training, engine.fit_transform)
 
   if test is None or len(test) == 0:
-    return training_comp_collection
+    return training_comp_collection, None, engine
 
   # Test data.
   test_comp_collection = _apply(test, engine.transform)
-  return (training_comp_collection, test_comp_collection)
+  return training_comp_collection, test_comp_collection, engine
 
 
 def pca(
@@ -181,6 +181,12 @@ def pca(
     training: A collection of `EmbeddingMatrix` objects used to train PCA.
     test: A collection of `EmbeddingMatrix` objects used for testing.
     ncomponents: Number of components (>=1) or percentage of variance (<1) to keep.
+
+  Returns:
+    A tuple consisting of:
+      - EmbeddingCollection containing principal components for the training sets.
+      - None or EmbeddingCollection containing principal components for the test sets.
+      - A `decomposition.PCA` object.
   """
   return _apply_component_analysis(training, test, ncomponents, 'pca')
 
@@ -195,6 +201,12 @@ def ica(
     training: A collection of `EmbeddingMatrix` objects used to train PCA.
     test: A collection of `EmbeddingMatrix` objects used for testing.
     ncomponents: Number of components (>=1) or percentage of variance (<1) to keep.
+
+  Returns:
+    A tuple consisting of:
+      - EmbeddingCollection containing principal components for the training sets.
+      - None or EmbeddingCollection containing principal components for the test sets.
+      - A `decomposition.ICA` object.
   """
   return _apply_component_analysis(training, test, ncomponents, 'ica')
 
@@ -209,6 +221,12 @@ def cca(
     training: A list where each item is a collection of `EmbeddingMatrix` objects used to train CCA.
     test: A list of the same size as `training` but where the collections are used for testing.
     ncomponents: Number of canonical components.
+
+  Returns:
+    A tuple consisting of:
+      - List[EmbeddingCollection] containing principal components for the training sets.
+      - None or List[EmbeddingCollection] containing principal components for the test sets.
+      - An `rcca.CCA` object.
   """
   # Validate the arguments.
   if len(training) < 2:
@@ -258,14 +276,14 @@ def cca(
   training_cc_collection = _unpack(training, _cca.comps, items)
 
   if test is None or len(test) == 0:
-    return training_cc_collection
+    return training_cc_collection, None, _cca
 
   # Test.
   test_set, items = _pack(test)
   _, _, comps = rcca.recon(test_set, _cca.ws, kernelcca=False)
   comps = np.array(comps)
   test_cc_collection = _unpack(test, comps, items)
-  return (training_cc_collection, test_cc_collection)
+  return training_cc_collection, test_cc_collection, _cca
 
 
 def render_components(
