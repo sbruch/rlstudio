@@ -211,6 +211,31 @@ def ica(
   return _apply_component_analysis(training, test, ncomponents, 'ica')
 
 
+def _cca_pack(collections: List[EmbeddingCollection]):
+  """Prepare datasets for CCA."""
+  dataset = []
+  items = collections[0][0].items
+  for collection in collections:
+    matrix = np.zeros((len(collection) * items, collection[0].dim))
+    for i, em in enumerate(collection):
+      matrix[i*items:(i+1)*items] = em.matrix
+    dataset.append(matrix)
+  return dataset, items
+
+def _cca_unpack(collections, ccs, items):
+  """Creates a new collection of EmbeddingMatrix objects."""
+  cc_collections: List[EmeddingCollection] = []
+  for i in range(len(collections)):
+    cc_collection: EmbeddingCollection = []
+    for j in range(len(collections[i])):
+      em = EmbeddingMatrix(items, ccs[i].shape[-1])
+      em.matrix = ccs[i][j*items:(j+1)*items]
+      cc_collection.append(em)
+    cc_collections.append(cc_collection)
+  return cc_collections
+
+
+
 def cca(
     training: List[EmbeddingCollection],
     test: List[EmbeddingCollection],
@@ -246,44 +271,53 @@ def cca(
         if em.items != reference[0].items:
           raise ValueError(f'Test embedding matrices do not have the same number of items')
 
-  def _pack(collections):
-    # Prepare datasets for CCA.
-    dataset = []
-    items = collections[0][0].items
-    for collection in collections:
-      matrix = np.zeros((len(collection) * items, collection[0].dim))
-      for i, em in enumerate(collection):
-        matrix[i*items:(i+1)*items] = em.matrix
-      dataset.append(matrix)
-    return dataset, items
-
-  def _unpack(collections, ccs, items):
-    # Create a new collection of EmbeddingMatrix objects.
-    cc_collections: List[EmeddingCollection] = []
-    for i in range(len(collections)):
-      cc_collection: EmbeddingCollection = []
-      for j in range(len(collections[i])):
-        em = EmbeddingMatrix(items, ccs[i].shape[-1])
-        em.matrix = ccs[i][j*items:(j+1)*items]
-        cc_collection.append(em)
-      cc_collections.append(cc_collection)
-    return cc_collections
-
   _cca = rcca.CCA(kernelcca=False, reg=.01, numCC=ncomponents)
   # Training.
-  training_set, items = _pack(training)
+  training_set, items = _cca_pack(training)
   _cca.train(training_set)
-  training_cc_collection = _unpack(training, _cca.comps, items)
+  training_cc_collection = _cca_unpack(training, _cca.comps, items)
 
   if test is None or len(test) == 0:
     return training_cc_collection, None, _cca
 
   # Test.
-  test_set, items = _pack(test)
+  test_set, items = _cca_pack(test)
   _, _, comps = rcca.recon(test_set, _cca.ws, kernelcca=False)
   comps = np.array(comps)
-  test_cc_collection = _unpack(test, comps, items)
+  test_cc_collection = _cca_unpack(test, comps, items)
   return training_cc_collection, test_cc_collection, _cca
+
+
+def cca_predict(
+    cca: rcca.CCA,
+    sets: List[EmbeddingCollection],
+    cutoff=1e-15):
+  """Transforms the embedding collections accorind go the given `cca` weights.
+
+  Args:
+    cca: CCA object.
+    sets: Input matrices to transform.
+
+  Returns:
+    List[EmbeddingCollection] consisting of transformed embedding matrices.
+  """
+  def _listdot(d1, d2): return [np.dot(x[0].T, x[1]) for x in zip(d1, d2)]
+
+  dataset, items = _cca_pack(sets)
+
+  iws = [np.linalg.pinv(w.T, rcond=cutoff) for w in cca.ws]
+  ccomp = _listdot([d.T for d in dataset], cca.ws)
+  ccomp = np.array(ccomp)
+  preds = []
+
+  for dnum in range(len(dataset)):
+    idx = np.ones((len(dataset),))
+    idx[dnum] = False
+    proj = ccomp[idx > 0].mean(0)
+    pred = np.dot(iws[dnum], proj.T).T
+    preds.append(pred)
+
+  return _cca_unpack(dataset, preds, items)
 
 
 def render_components(
