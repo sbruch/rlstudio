@@ -131,7 +131,7 @@ def _apply_component_analysis(
       raise ValueError(f'Training embedding matrices are not compatible with each other')
   if test is not None and len(test) != 0:
     for em in test:
-      if not training[0].is_compatible(em):
+      if training[0].dim != em.dim:
         raise ValueError(f'Test embedding matrices are not compatible with training matrices')
 
   ncomponents = min(ncomponents, training[0].dim, training[0].items)
@@ -268,7 +268,7 @@ def cca(
       raise ValueError('Number of collections must be the same in the training and test sets')
     for collection in test:
       for em in collection:
-        if em.items != reference[0].items:
+        if em.items != test[0][0].items:
           raise ValueError(f'Test embedding matrices do not have the same number of items')
 
   _cca = rcca.CCA(kernelcca=False, reg=.01, numCC=ncomponents)
