@@ -541,7 +541,8 @@ class Embeddings:
 def render_similarity(matrix: np.ndarray,
                       labels: List[str],
                       xlabel: str, ylabel: str,
-                      specials: Dict[int, str]=None):
+                      specials: Dict[int, str]=None,
+                      cmap='RdBu', vmin=-1., vmax=1.):
   """Renders a pairwise similarity matrix as a heatmap.
 
   Args:
@@ -562,8 +563,8 @@ def render_similarity(matrix: np.ndarray,
 
   fig, ax = plt.subplots(figsize=(8, 6))
   imshow = ax.imshow(matrix, interpolation='none',
-                     cmap='RdBu', origin='upper',
-                     vmin=-1., vmax=1., aspect='auto')
+                     cmap=cmap, origin='upper',
+                     vmin=vmin, vmax=vmax, aspect='auto')
 
   # Add ticks.
   ticklabels, indices = np.unique(labels, return_index=True)
