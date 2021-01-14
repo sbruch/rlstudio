@@ -400,7 +400,7 @@ def render_components(
 
     if specials is not None:
       for x, c in specials.items():
-        ax.axvspan(x - .5, x + .5, color=c, alpha=.1)
+        ax.axvspan(x - .5, x + .5, color=c, alpha=.2)
 
     plt.legend(loc='best')
     plt.tight_layout()
