@@ -19,23 +19,6 @@ class EmbeddingMatrix:
     self.dim = dim
     self.matrix = np.zeros((items, dim))
 
-  def concatenate(self, others: 'EmbeddingMatrix') -> 'EmbeddingMatrix':
-    """Concatenates the embedding matrices along the first dimension."""
-    for o in others:
-      if not isinstance(o, EmbeddingMatrix) or self.dim != o.dim:
-        raise ValueError(f'Embedding dimensions do not match: {self.dim} vs. {o.dim}')
-
-    items = self.items + np.sum([o.items for o in others])
-    output = EmbeddingMatrix(items, self.dim)
-    output.matrix[0:self.items] = self.matrix
-
-    current = self.items
-    for o in others:
-      output.matrix[current:current+o.items] = o.matrix
-      current += o.items
-
-    return output
-
   def is_compatible(self, other) -> bool:
     if not isinstance(other, EmbeddingMatrix):
       return False
@@ -419,6 +402,7 @@ class TaskEmbeddings(EmbeddingMatrix):
                task_id: TaskId,
                observation_type: ObservationType,
                sorted_observation_ids: List[ObservationId],
+               embeddings_per_observation: int,
                embedding_size: int):
     """Creates an `TaskEmbeddings` object.
 
@@ -428,16 +412,19 @@ class TaskEmbeddings(EmbeddingMatrix):
       observation_type: Type of observation to record. All other types will be ignored.
       sorted_observation_ids: A sorted list of observations to record.
           Observations not included in this list will be dismissed.
+      embeddings_per_observation: Number of embeddings per observation id.
       embedding_size: Size of the embedding.
     """
     self.id = id
     self.task_id = task_id
     self.observation_type = observation_type
     self.sorted_observation_ids = sorted_observation_ids
+    self.embeddings_per_observation = embeddings_per_observation
     self.embedding_size = embedding_size
 
-    super().__init__(len(sorted_observation_ids), embedding_size)
-    self.counts = np.zeros((len(sorted_observation_ids), 1))
+    super().__init__(len(sorted_observation_ids) * embeddings_per_observation,
+                     embedding_size)
+    self.counts = np.zeros((len(sorted_observation_ids), 1), dtype=np.int)
 
   def record(self,
              metadata: exp_base.EvaluationMetadata,
@@ -453,14 +440,10 @@ class TaskEmbeddings(EmbeddingMatrix):
     if embedding.ndim > 1 or len(embedding) != self.embedding_size:
       raise ValueError(f'Expected a 1D embedding of size {self.embedding_size} '
                        f'but got {embedding.shape}')
-    s = self.sorted_observation_ids.index(timestep.observation_id)
-    self.matrix[s] += embedding
-    self.counts[s][0] += 1
-
-  def commit(self) -> None:
-    """Finalizes the statistics."""
-    self.matrix /= self.counts
-    self.counts[:] = np.nan
+    idx = self.sorted_observation_ids.index(timestep.observation_id)
+    s = idx * self.embeddings_per_observation + self.counts[idx][0]
+    self.matrix[s] = embedding
+    self.counts[idx][0] += 1
 
   def is_compatible(self, other) -> bool:
     if not isinstance(other, TaskEmbeddings):
@@ -487,6 +470,7 @@ class Embeddings:
                task_ids: List[TaskId],
                observation_type: ObservationType,
                sorted_observation_ids: List[ObservationId],
+               embeddings_per_observation: int,
                embedding_size: int):
     """Creates an `Embeddings` object.
 
@@ -496,19 +480,22 @@ class Embeddings:
       observation_type: Type of observation to record. All other types will be ignored.
       sorted_observation_ids: A sorted list of observations to record.
           Observations not included in this list will be dismissed.
+      embeddings_per_observation: Number of embeddings per observation id.
       embedding_size: Size of the embedding.
     """
     self.id = id
     self.task_ids = task_ids
     self.observation_type = observation_type
     self.sorted_observation_ids = sorted_observation_ids
+    self.embeddings_per_observation = embeddings_per_observation
     self.embedding_size = embedding_size
 
     self.dataset = {}
     for t in task_ids:
       self.dataset[t] = TaskEmbeddings(
-          f'{t}_{id}', t, observation_type,
-          sorted_observation_ids, embedding_size)
+        f'{t}_{id}', t, observation_type,
+        sorted_observation_ids,
+        embeddings_per_observation, embedding_size)
 
   def __getitem__(self, task_id):
     return self.dataset[task_id]
@@ -523,11 +510,6 @@ class Embeddings:
         timestep.observation_id not in self.sorted_observation_ids):
       return
     self.dataset[metadata.task_id].record(metadata, timestep, embedding)
-
-  def commit(self, metadata: exp_base.EvaluationMetadata) -> None:
-    """Finalizes the statistics."""
-    if metadata.task_id in self.dataset:
-      self.dataset[metadata.task_id].commit()
 
   def is_compatible(self, other) -> bool:
     if not isinstance(other, Embeddings):
