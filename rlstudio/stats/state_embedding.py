@@ -239,13 +239,15 @@ def _cca_unpack(collections, ccs, items):
 def cca(
     training: List[EmbeddingCollection],
     test: List[EmbeddingCollection],
-    ncomponents: int):
+    ncomponents: int,
+    reg=.01):
   """Applies CCA to extract canonical components.
 
   Args:
     training: A list where each item is a collection of `EmbeddingMatrix` objects used to train CCA.
     test: A list of the same size as `training` but where the collections are used for testing.
     ncomponents: Number of canonical components.
+    reg: Regularization parameter.
 
   Returns:
     A tuple consisting of:
@@ -271,7 +273,7 @@ def cca(
         if em.items != test[0][0].items:
           raise ValueError(f'Test embedding matrices do not have the same number of items')
 
-  _cca = rcca.CCA(kernelcca=False, reg=.01, numCC=ncomponents)
+  _cca = rcca.CCA(kernelcca=False, reg=reg, numCC=ncomponents)
   # Training.
   training_set, items = _cca_pack(training)
   _cca.train(training_set)
