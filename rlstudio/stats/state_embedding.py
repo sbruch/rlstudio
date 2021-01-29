@@ -202,6 +202,7 @@ def _cca_pack(collections: List[EmbeddingCollection]):
     matrix = np.zeros((len(collection) * items, collection[0].dim))
     for i, em in enumerate(collection):
       matrix[i*items:(i+1)*items] = em.matrix
+    matrix -= np.mean(matrix, axis=0)
     dataset.append(matrix)
   return dataset, items
 
