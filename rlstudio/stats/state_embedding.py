@@ -224,7 +224,8 @@ def cca(
     training: List[EmbeddingCollection],
     test: List[EmbeddingCollection],
     ncomponents: int,
-    reg=.01):
+    reg=.01,
+    verbose=False):
   """Applies CCA to extract canonical components.
 
   Args:
@@ -232,6 +233,7 @@ def cca(
     test: A list of the same size as `training` but where the collections are used for testing.
     ncomponents: Number of canonical components.
     reg: Regularization parameter.
+    verbose: Sets the pyrcca.CCA's verbosity.
 
   Returns:
     A tuple consisting of:
@@ -257,7 +259,7 @@ def cca(
         if em.items != test[0][0].items:
           raise ValueError(f'Test embedding matrices do not have the same number of items')
 
-  _cca = rcca.CCA(kernelcca=False, reg=reg, numCC=ncomponents)
+  _cca = rcca.CCA(kernelcca=False, reg=reg, numCC=ncomponents, verbose=verbose)
   # Training.
   training_set, items = _cca_pack(training)
   _cca.train(training_set)
