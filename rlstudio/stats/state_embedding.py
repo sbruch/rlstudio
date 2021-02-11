@@ -354,15 +354,16 @@ def render_components(
   xticks = dividers + gaps
 
   # Build a color map.
-  cmap = iter(plt.cm.rainbow(np.linspace(0, 1, len(matrices))))
+  cmap = iter(plt.cm.PiYG(np.linspace(0, 1, len(matrices))))
   colors = {}
   for id in matrices.keys():
     colors[id] = next(cmap)
 
   # Generate figures.
+  plt.rcParams.update({'font.size': 20})
   figures = {}
   for component in range(ncomponents):
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=(8, 6))
 
     for id, ems in matrices.items():
       data = np.expand_dims(ems[0].matrix[:, component], axis=1)
@@ -387,8 +388,11 @@ def render_components(
       ax.axvline(position, color='k', linestyle=':', linewidth=.1)
 
     if specials is not None:
+      ymin, ymax = ax.get_ylim()
       for x, c in specials.items():
-        ax.axvspan(x - .5, x + .5, color=c, alpha=.2)
+        ax.add_artist(matplotlib.patches.Ellipse(
+          (x, ymin), width=.5, height=(ymax-ymin)/50.,
+          color=c, clip_on=False))
 
     plt.legend(loc='best')
     plt.tight_layout()
@@ -548,6 +552,7 @@ def render_similarity(matrix: np.ndarray,
   if len(labels) != matrix.shape[0]:
     raise ValueError(f'Expected {matrix.shape[0]} labels but got {len(labels)}')
 
+  plt.rcParams.update({'font.size': 22})
   fig, ax = plt.subplots(figsize=(8, 6))
   imshow = ax.imshow(matrix, interpolation='none',
                      cmap=cmap, origin='upper',
@@ -579,10 +584,10 @@ def render_similarity(matrix: np.ndarray,
   if specials is not None:
     for idx, color in specials.items():
       ax.add_artist(matplotlib.patches.Ellipse(
-          (-.6, idx), width=.3, height=.3,
+          (-.6, idx), width=.5, height=.5,
           color=color, clip_on=False))
       ax.add_artist(matplotlib.patches.Ellipse(
-          (idx, matrix.shape[0] - .35), width=.3, height=.3,
+          (idx, matrix.shape[0] - .35), width=.5, height=.5,
           color=color, clip_on=False))
 
   fig.colorbar(imshow, shrink=.3)
