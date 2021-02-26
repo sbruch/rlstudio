@@ -46,17 +46,29 @@ class EmbeddingMatrix:
 
     return matrix
 
+
+  def tsne(self):
+    """Applies TSNE to the embeddings and returns coordinates."""
+    projection = manifold.TSNE(n_components=2, metric="precomputed", square_distances=True)
+    distance_matrix = metrics.pairwise_distances(self.matrix, self.matrix, metric='cosine')
+    return projection.fit_transform(distance_matrix)
+
+
   def render_tsne(self,
+                  coords: np.ndarray,
                   labels: List[str],
                   markers: List[str]=None,
-                  filled: List[bool]=None):
+                  filled: List[bool]=None,
+                  axes=None):
     """Renders the embeddings using TSNE.
 
     Args:
+      coords: 2D list of coordinates.
       labels: List of labels for every item.
       markers: List of markers to use. Default is 'o' if None.
       filled: List of booleans indicating whether the marker is filled.
           Default to True if None.
+      axes: Optional `matplotlib.axes.Axes` to draw on.
 
     Returns:
       A tuple containing `matplotlib.figure.Figure` and `matplotlib.axes.Axes`.
@@ -64,9 +76,6 @@ class EmbeddingMatrix:
     if len(labels) != self.items:
       raise ValueError(f'Expected {self.items} labels but got {len(labels)}')
 
-    projection = manifold.TSNE(n_components=2, metric="precomputed", square_distances=True)
-    distance_matrix = metrics.pairwise_distances(self.matrix, self.matrix, metric='cosine')
-    coords = projection.fit_transform(distance_matrix)
     x = coords[:, 0]
     y = coords[:, 1]
 
@@ -82,23 +91,29 @@ class EmbeddingMatrix:
     if filled is None:
       filled = np.tile([True], len(labels))
 
-    fig, ax = plt.subplots()
-    for i in range(self.items):
-      plt.scatter(x[i], y[i],
-                  facecolors=colors[labels[i]] if filled[i] else 'none',
-                  edgecolors=colors[labels[i]],
-                  marker=markers[i], s=50, label=labels[i])
+    if axes is None:
+      fig, axes = plt.subplots()
 
-    handles, labels = plt.gca().get_legend_handles_labels()
+    for i in range(self.items):
+      axes.scatter(x[i], y[i],
+                   facecolors=colors[labels[i]] if filled[i] else 'none',
+                   edgecolors=colors[labels[i]],
+                   marker=markers[i], s=50, label=labels[i])
+
+    handles, labels = axes.get_legend_handles_labels()
     labels, ids = np.unique(labels, return_index=True)
     handles = [handles[i] for i in ids]
-    plt.legend(handles, labels, bbox_to_anchor=(1.05, 1.0), loc='upper left')
+    axes.legend(handles, labels, bbox_to_anchor=(-.35, 1.0), loc='upper left')
 
-    ax.set_xticks([])
-    ax.set_yticks([])
+    axes.set_xticks([])
+    axes.set_yticks([])
+
+    if axes is not None:
+      return
+
     plt.tight_layout()
     plt.close()
-    return fig, ax
+    return fig, axes
 
 
 def _apply_component_analysis(
@@ -533,7 +548,8 @@ def render_similarity(matrix: np.ndarray,
                       labels: List[str],
                       xlabel: str, ylabel: str,
                       specials: Dict[int, str]=None,
-                      cmap='RdBu', vmin=-1., vmax=1.):
+                      cmap='RdBu', vmin=-1., vmax=1.,
+                      axes=None):
   """Renders a pairwise similarity matrix as a heatmap.
 
   Args:
@@ -553,8 +569,10 @@ def render_similarity(matrix: np.ndarray,
     raise ValueError(f'Expected {matrix.shape[0]} labels but got {len(labels)}')
 
   plt.rcParams.update({'font.size': 22})
-  fig, ax = plt.subplots(figsize=(8, 6))
-  imshow = ax.imshow(matrix, interpolation='none',
+
+  if axes is None:
+    fig, axes = plt.subplots(figsize=(8, 6))
+  imshow = axes.imshow(matrix, interpolation='none',
                      cmap=cmap, origin='upper',
                      vmin=vmin, vmax=vmax, aspect='auto')
 
@@ -568,30 +586,33 @@ def render_similarity(matrix: np.ndarray,
   gaps = (gaps[1:] - gaps[:-1]) / 2.
   ticks = dividers + gaps
 
-  ax.tick_params(axis=u'both', which=u'both', length=0, pad=15)
-  ax.set_xlabel(xlabel)
-  ax.set_ylabel(ylabel)
-  ax.set_yticks(ticks)
-  ax.set_xticks(ticks)
-  ax.set_yticklabels(ticklabels, ha='center')
-  ax.set_xticklabels(ticklabels, ha='center')
+  axes.tick_params(axis=u'both', which=u'both', length=0, pad=15)
+  axes.set_xlabel(xlabel)
+  axes.set_ylabel(ylabel)
+  axes.set_yticks(ticks)
+  axes.set_xticks(ticks)
+  axes.set_yticklabels(ticklabels, ha='center')
+  axes.set_xticklabels(ticklabels, ha='center')
 
   for position in dividers:
-    ax.axhline(position, color='k', linestyle='-', linewidth=.2)
-    ax.axvline(position, color='k', linestyle='-', linewidth=.2)
+    axes.axhline(position, color='k', linestyle='-', linewidth=.2)
+    axes.axvline(position, color='k', linestyle='-', linewidth=.2)
 
   # Add markers if requested.
   if specials is not None:
     for idx, color in specials.items():
-      ax.add_artist(matplotlib.patches.Ellipse(
-          (-.6, idx), width=.5, height=.5,
-          color=color, clip_on=False))
-      ax.add_artist(matplotlib.patches.Ellipse(
-          (idx, matrix.shape[0] - .35), width=.5, height=.5,
-          color=color, clip_on=False))
+      axes.add_artist(matplotlib.patches.Ellipse(
+        (-.6, idx), width=.5, height=.5,
+        color=color, clip_on=False))
+      axes.add_artist(matplotlib.patches.Ellipse(
+        (idx, matrix.shape[0] - .35), width=.5, height=.5,
+        color=color, clip_on=False))
+
+  if axes is not None:
+    return
 
   fig.colorbar(imshow, shrink=.3)
   plt.tight_layout()
   plt.close()
 
-  return fig, ax
+  return fig, axes
