@@ -572,7 +572,7 @@ def render_similarity(matrix: np.ndarray,
 
   if axes is None:
     fig, axes = plt.subplots(figsize=(8, 6))
-  imshow = axes.imshow(matrix, interpolation='none',
+  imshow = axes.imshow(matrix, interpolation=None,
                      cmap=cmap, origin='upper',
                      vmin=vmin, vmax=vmax, aspect='auto')
 
