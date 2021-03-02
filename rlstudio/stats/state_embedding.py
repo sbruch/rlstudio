@@ -98,7 +98,7 @@ class EmbeddingMatrix:
       axes.scatter(x[i], y[i],
                    facecolors=colors[labels[i]] if filled[i] else 'none',
                    edgecolors=colors[labels[i]],
-                   marker=markers[i], s=50, label=labels[i])
+                   marker=markers[i], s=100, label=labels[i])
 
     handles, labels = axes.get_legend_handles_labels()
     labels, ids = np.unique(labels, return_index=True)
