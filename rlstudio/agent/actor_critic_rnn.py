@@ -15,7 +15,9 @@ from typing import Any, Callable, List, NamedTuple, Tuple
 
 RNNState = Any
 PolicyLogits = jnp.ndarray
-ModelOutput = Tuple[PolicyLogits, Value, PolicyEmbedding, ValueEmbedding, StateEmbedding]
+Successor = jnp.ndarray
+ModelOutput = Tuple[PolicyLogits, Value, Successor,
+                    PolicyEmbedding, ValueEmbedding, StateEmbedding]
 # Input to a PolicyValueNet consists of: Observation, previous reward, and previous action tensors.
 PolicyValueNet = Callable[[List[jnp.ndarray], RNNState], Tuple[ModelOutput, RNNState]]
 
@@ -42,7 +44,8 @@ class ActorCriticRNN(base.Agent):
       discount: float,
       td_lambda: float,
       entropy_cost: float = 1.,
-      critic_cost: float = 1.):
+      critic_cost: float = 1.,
+      successor_cost: float = 0.):
     @jax.jit
     def pack(trajectory: buffer.Trajectory) -> List[jnp.ndarray]:
       """Converts a trajectory into an input."""
@@ -67,7 +70,7 @@ class ActorCriticRNN(base.Agent):
       # Dyanmically unroll the network. This Haiku utility function unpacks the
       # list of input tensors such that the i^{th} row from each input tensor
       # is presented to the i^{th} unrolled RNN module.
-      (logits, values, _, _, _), new_rnn_unroll_state = hk.dynamic_unroll(
+      (logits, values, successors, _, _, state_embeddings), new_rnn_unroll_state = hk.dynamic_unroll(
         network, inputs, rnn_unroll_state)
       trajectory_len = trajectory.actions.shape[0]
 
@@ -87,7 +90,14 @@ class ActorCriticRNN(base.Agent):
       entropy_loss = jnp.mean(
         rlax.entropy_loss(logits[:-1, 0], jnp.ones(trajectory_len)))
 
-      combined_loss = actor_loss + critic_cost * critic_loss + entropy_cost * entropy_loss
+      successor_loss = jnp.mean(
+        jnp.linalg.norm(jax.lax.stop_gradient(state_embeddings[1:]) - successors[:-1],
+                        ord=2, axis=-1))
+
+      combined_loss = (actor_loss +
+                       critic_cost * critic_loss +
+                       entropy_cost * entropy_loss +
+                       successor_cost * successor_loss)
 
       return combined_loss, new_rnn_unroll_state
 
@@ -138,7 +148,8 @@ class ActorCriticRNN(base.Agent):
       jnp.ones((1, 1, 1), dtype=jnp.float32) * previous_reward,
       jax.nn.one_hot([[previous_action]], self._action_spec.num_values)
     ]
-    (logits, value, policy_embedding, value_embedding, state_embedding), rnn_state = (
+    (logits, value, successor, policy_embedding,
+     value_embedding, state_embedding), rnn_state = (
       self._forward(self._state.params, inputs, self._state.rnn_state))
     self._state = self._state._replace(rnn_state=rnn_state)
 
@@ -180,6 +191,7 @@ def make(observation_spec: specs.Array,
          td_lambda: float = .9,
          entropy_cost: float = 1.,
          critic_cost: float = 1.,
+         successor_cost: float = 0.,
          seed: int = 0):
   """Creates a default agent."""
   initial_rnn_state = jnp.zeros((1, rnn_hidden_size), dtype=jnp.float32)
@@ -193,13 +205,17 @@ def make(observation_spec: specs.Array,
     gru = hk.GRU(rnn_hidden_size)
     policy_head = hk.Linear(action_spec.num_values)
     value_head = hk.Linear(1)
+    successor_head = hk.Linear(rnn_hidden_size)
 
     embedding = jnp.concatenate([observation, previous_reward, previous_action], -1)
     embedding = torso(embedding)
     embedding, state = gru(embedding, state)
     logits = policy_head(embedding)
     value = value_head(embedding)
-    return (logits, jnp.squeeze(value, axis=-1), embedding, embedding, embedding), state
+    successor = successor_head(embedding)
+
+    return (logits, jnp.squeeze(value, axis=-1), successor,
+            embedding, embedding, embedding), state
 
   return ActorCriticRNN(
     observation_spec=observation_spec,
@@ -212,4 +228,5 @@ def make(observation_spec: specs.Array,
     discount=discount,
     td_lambda=td_lambda,
     entropy_cost=entropy_cost,
-    critic_cost=critic_cost,)
+    critic_cost=critic_cost,
+    successor_cost=successor_cost,)
