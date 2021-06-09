@@ -91,8 +91,10 @@ class EmbeddingMatrix:
     if filled is None:
       filled = np.tile([True], len(labels))
 
+    axes_given = True
     if axes is None:
       fig, axes = plt.subplots()
+      axes_given = False
 
     for i in range(self.items):
       axes.scatter(x[i], y[i],
@@ -108,7 +110,7 @@ class EmbeddingMatrix:
     axes.set_xticks([])
     axes.set_yticks([])
 
-    if axes is not None:
+    if axes_given:
       return
 
     plt.tight_layout()
@@ -570,8 +572,11 @@ def render_similarity(matrix: np.ndarray,
 
   plt.rcParams.update({'font.size': 22})
 
+  axes_given = True
   if axes is None:
     fig, axes = plt.subplots(figsize=(8, 6))
+    axes_given = False
+
   imshow = axes.imshow(matrix, interpolation=None,
                      cmap=cmap, origin='upper',
                      vmin=vmin, vmax=vmax, aspect='auto')
@@ -608,7 +613,7 @@ def render_similarity(matrix: np.ndarray,
         (idx, matrix.shape[0] - .35), width=.5, height=.5,
         color=color, clip_on=False))
 
-  if axes is not None:
+  if axes_given:
     return
 
   fig.colorbar(imshow, shrink=.3)
