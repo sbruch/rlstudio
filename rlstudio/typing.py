@@ -11,6 +11,7 @@ Embedding = jnp.ndarray
 PolicyEmbedding = Embedding
 ValueEmbedding = Embedding
 StateEmbedding = Embedding
+SuccessorEmbedding = Embedding
 
 """Identifier of an environment.Task."""
 TaskId = str
