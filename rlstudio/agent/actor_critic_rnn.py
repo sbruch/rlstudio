@@ -3,7 +3,7 @@
 from rlstudio.agent import base, buffer
 from rlstudio.environment import base as env_base
 from rlstudio.typing import Action, Distribution, PolicyEmbedding
-from rlstudio.typing import StateEmbedding, Value, ValueEmbedding
+from rlstudio.typing import StateEmbedding, SuccessorEmbedding, Value, ValueEmbedding
 
 from dm_env import specs
 import haiku as hk
@@ -17,7 +17,8 @@ RNNState = Any
 PolicyLogits = jnp.ndarray
 Successor = jnp.ndarray
 ModelOutput = Tuple[PolicyLogits, Value, Successor,
-                    PolicyEmbedding, ValueEmbedding, StateEmbedding]
+                    PolicyEmbedding, ValueEmbedding,
+                    StateEmbedding, SuccessorEmbedding]
 # Input to a PolicyValueNet consists of: Observation, previous reward, and previous action tensors.
 PolicyValueNet = Callable[[List[jnp.ndarray], RNNState], Tuple[ModelOutput, RNNState]]
 
@@ -70,7 +71,7 @@ class ActorCriticRNN(base.Agent):
       # Dyanmically unroll the network. This Haiku utility function unpacks the
       # list of input tensors such that the i^{th} row from each input tensor
       # is presented to the i^{th} unrolled RNN module.
-      (logits, values, successors, _, _, state_embeddings), new_rnn_unroll_state = hk.dynamic_unroll(
+      (logits, values, successors, _, _, state_embeddings, _), new_rnn_unroll_state = hk.dynamic_unroll(
         network, inputs, rnn_unroll_state)
       trajectory_len = trajectory.actions.shape[0]
 
@@ -90,9 +91,14 @@ class ActorCriticRNN(base.Agent):
       entropy_loss = jnp.mean(
         rlax.entropy_loss(logits[:-1, 0], jnp.ones(trajectory_len)))
 
-      successor_loss = jnp.mean(
-        jnp.linalg.norm(jax.lax.stop_gradient(state_embeddings[1:]) - successors[:-1],
-                        ord=2, axis=-1))
+      # Compute cosine similarity between successor representations.
+      u = jax.lax.stop_gradient(state_embeddings[1:]) + discount * jax.lax.stop_gradient(successors[1:])
+      v = successors[:-1]
+      dot = jnp.linalg.norm(u * v, ord=1, axis=-1)
+      u_norm = jnp.linalg.norm(u, ord=2, axis=-1)
+      v_norm = jnp.linalg.norm(v, ord=2, axis=-1)
+      dissimilarity = -dot / (u_norm * v_norm)
+      successor_loss = jnp.nanmean(jnp.nan_to_num(dissimilarity, posinf=jnp.nan, neginf=jnp.nan))
 
       combined_loss = (actor_loss +
                        critic_cost * critic_loss +
@@ -149,7 +155,7 @@ class ActorCriticRNN(base.Agent):
       jax.nn.one_hot([[previous_action]], self._action_spec.num_values)
     ]
     (logits, value, successor, policy_embedding,
-     value_embedding, state_embedding), rnn_state = (
+     value_embedding, state_embedding, successor_embedding), rnn_state = (
       self._forward(self._state.params, inputs, self._state.rnn_state))
     self._state = self._state._replace(rnn_state=rnn_state)
 
@@ -164,7 +170,8 @@ class ActorCriticRNN(base.Agent):
       policy_embedding=policy_embedding,
       value=value,
       value_embedding=value_embedding,
-      state_embedding=state_embedding)
+      state_embedding=state_embedding,
+      successor_embedding=successor_embedding)
 
   def update(self,
              timestep: env_base.TimeStep,
@@ -205,17 +212,19 @@ def make(observation_spec: specs.Array,
     gru = hk.GRU(rnn_hidden_size)
     policy_head = hk.Linear(action_spec.num_values)
     value_head = hk.Linear(1)
+    successor_torso = hk.nets.MLP([rnn_hidden_size, rnn_hidden_size])
     successor_head = hk.Linear(rnn_hidden_size)
 
-    embedding = jnp.concatenate([observation, previous_reward, previous_action], -1)
-    embedding = torso(embedding)
-    embedding, state = gru(embedding, state)
+    input_embedding = jnp.concatenate([observation, previous_reward, previous_action], -1)
+    input_embedding = torso(input_embedding)
+    embedding, state = gru(input_embedding, state)
     logits = policy_head(embedding)
     value = value_head(embedding)
-    successor = successor_head(embedding)
+    successor_embedding = successor_torso(embedding)
+    successor = successor_head(successor_embedding)
 
     return (logits, jnp.squeeze(value, axis=-1), successor,
-            embedding, embedding, embedding), state
+            embedding, embedding, embedding, successor_embedding), state
 
   return ActorCriticRNN(
     observation_spec=observation_spec,

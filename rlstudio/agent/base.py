@@ -18,6 +18,7 @@ class Decision:
   value: State value estimates.
   value_embedding: Embeddings from the agent's value function.
   state_embedding: Embeddings representing a state.
+  successor_embedding: Embeddings representing the successor.
   """
   action: Action
   action_dist: Distribution
@@ -25,6 +26,7 @@ class Decision:
   value: Value
   value_embedding: ValueEmbedding
   state_embedding: StateEmbedding
+  successor_embedding: StateEmbedding
 
 
 class Agent(abc.ABC):
