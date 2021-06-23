@@ -79,13 +79,13 @@ class Buffer:
           a = np.expand_dims(a, 0)
         self._previous_action = a
 
-      self._observations[self._t] = timestep.observation
+      self._observations[self._t] = np.array(timestep.observation)
       self._needs_reset = False
 
     # Append to the buffer.
-    self._observations[self._t + 1] = new_timestep.observation
-    self._actions[self._t] = new_timestep.action
-    self._rewards[self._t] = new_timestep.reward
+    self._observations[self._t + 1] = np.array(new_timestep.observation)
+    self._actions[self._t] = np.array(new_timestep.action)
+    self._rewards[self._t] = np.array(new_timestep.reward)
     self._discounts[self._t] = new_timestep.discount
     self._t += 1
 
