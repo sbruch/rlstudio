@@ -12,8 +12,8 @@ class BufferTest(absltest.TestCase):
     max_trajectory_length = 10
     observation_shape = (3, 3)
     buffer = blib.Buffer(
-      observation_spec=specs.Array(observation_shape, dtype=np.float),
-      action_spec=specs.Array((), dtype=np.int),
+      observation_spec=specs.Array(observation_shape, dtype=np.float32),
+      action_spec=specs.Array((), dtype=np.int32),
       max_trajectory_length=max_trajectory_length)
     dummy_step = base.transition(
       action=0., reward=0.,

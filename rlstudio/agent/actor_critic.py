@@ -47,12 +47,12 @@ class ActorCritic(base.Agent):
       """Converts a trajectory into an input."""
       observations = trajectory.observations[:, None, ...]
 
-      rewards = jnp.concatenate([jnp.array([trajectory.previous_reward]),
-                                 trajectory.rewards], -1)
+      rewards = jnp.concatenate([trajectory.previous_reward,
+                                 jnp.squeeze(trajectory.rewards, -1)], -1)
       rewards = jnp.expand_dims(rewards, (1, 2))
 
-      previous_action = jax.nn.one_hot([trajectory.previous_action], action_spec.num_values)
-      actions = jax.nn.one_hot(trajectory.actions, action_spec.num_values)
+      previous_action = jax.nn.one_hot(trajectory.previous_action, action_spec.num_values)
+      actions = jax.nn.one_hot(jnp.squeeze(trajectory.actions, 1), action_spec.num_values)
       actions = jnp.expand_dims(jnp.concatenate([previous_action, actions], 0), 1)
 
       return observations, rewards, actions
@@ -65,14 +65,14 @@ class ActorCritic(base.Agent):
 
       td_errors = rlax.td_lambda(
         v_tm1=values[:-1],
-        r_t=trajectory.rewards,
+        r_t=jnp.squeeze(trajectory.rewards, -1),
         discount_t=trajectory.discounts * discount,
         v_t=values[1:],
         lambda_=jnp.array(td_lambda))
       critic_loss = jnp.mean(td_errors**2)
       actor_loss = rlax.policy_gradient_loss(
         logits_t=logits[:-1],
-        a_t=trajectory.actions,
+        a_t=jnp.squeeze(trajectory.actions, 1),
         adv_t=td_errors,
         w_t=jnp.ones_like(td_errors))
 
@@ -133,7 +133,8 @@ class ActorCritic(base.Agent):
       policy_embedding=policy_embedding,
       value=value,
       value_embedding=value_embedding,
-      state_embedding=state_embedding)
+      state_embedding=state_embedding,
+      successor_embedding=None)
 
   def update(self,
              timestep: env_base.TimeStep,

@@ -1,5 +1,4 @@
 from rlstudio.environment import base
-from rlstudio.typing import Action
 
 from dataclasses import dataclass
 from dm_env import specs
@@ -9,19 +8,19 @@ from typing import NamedTuple
 
 class Trajectory(NamedTuple):
   """A trajectory is a sequence of observations, actions, rewards, discounts."""
-  previous_reward: float  # Holds reward at time -1
-  previous_action: Action  # Holds action at time -1
+  previous_reward: np.ndarray  # [num_agents] Holds reward at time -1
+  previous_action: np.ndarray  # [num_agents] Holds action at time -1
   observations: np.ndarray  # [T + 1, ...]
-  actions: np.ndarray  # [T]
-  rewards: np.ndarray  # [T]
+  actions: np.ndarray  # [T, num_agents]
+  rewards: np.ndarray  # [T, num_agents]
   discounts: np.ndarray  # [T]
 
 
 class Buffer:
   """A buffer that accumulates trajectories."""
 
-  _previous_reward: float
-  _previous_action: Action
+  _previous_reward: np.ndarray
+  _previous_action: np.ndarray
   _observations: np.ndarray
   _actions: np.ndarray
   _rewards: np.ndarray
@@ -37,15 +36,19 @@ class Buffer:
       action_spec: specs.Array,
       max_trajectory_length: int):
     """Allocates capacity to hold a trajectory."""
-    self._previous_reward = 0.
-    self._previous_action = -1
+    self.num_agents: int = 1
+    if isinstance(action_spec, list):
+      self.num_agents = len(action_spec)
+
+    self._previous_reward = np.zeros(shape=(self.num_agents), dtype=np.float32)
+    self._previous_action = -1. * np.ones(shape=(self.num_agents), dtype=np.float32)
     self._observations = np.zeros(
       shape=(max_trajectory_length + 1, *observation_spec.shape),
       dtype=observation_spec.dtype)
     self._actions = np.zeros(
-      shape=(max_trajectory_length, *action_spec.shape),
+      shape=(max_trajectory_length, self.num_agents, *action_spec.shape),
       dtype=action_spec.dtype)
-    self._rewards = np.zeros(max_trajectory_length, dtype=np.float32)
+    self._rewards = np.zeros(shape=(max_trajectory_length, self.num_agents), dtype=np.float32)
     self._discounts = np.zeros(max_trajectory_length, dtype=np.float32)
     self._max_trajectory_length = max_trajectory_length
 
@@ -60,8 +63,22 @@ class Buffer:
     # Also keep track of previous action and reward.
     if self._needs_reset:
       self._t = 0
-      self._previous_reward = timestep.reward if timestep.reward is not None else 0.
-      self._previous_action = timestep.action if timestep.action is not None else -1
+      if timestep.reward is None:
+        self._previous_reward = np.zeros(shape=(self.num_agents), dtype=np.float32)
+      else:
+        r = np.array(timestep.reward)
+        if len(r.shape) == 0:
+          r = np.expand_dims(r, 0)
+        self._previous_reward = r
+
+      if timestep.action is None:
+        self._previous_action = -1. * np.ones(shape=(self.num_agents), dtype=np.float32)
+      else:
+        a = np.array(timestep.action)
+        if len(a.shape) == 0:
+          a = np.expand_dims(a, 0)
+        self._previous_action = a
+
       self._observations[self._t] = timestep.observation
       self._needs_reset = False
 
