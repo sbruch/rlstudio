@@ -39,15 +39,24 @@ class Buffer:
     self.num_agents: int = 1
     if isinstance(action_spec, list):
       self.num_agents = len(action_spec)
+      action_shape = action_spec[0].shape
+      action_dtype = action_spec[0].dtype
+      observation_shape = observation_spec[0].shape
+      observation_dtype = observation_spec[0].dtype
+    else:
+      action_shape = action_spec.shape
+      observation_shape = observation_spec.shape
+      action_dtype = action_spec.dtype
+      observation_dtype = observation_spec.dtype
 
     self._previous_reward = np.zeros(shape=(self.num_agents), dtype=np.float32)
     self._previous_action = -1. * np.ones(shape=(self.num_agents), dtype=np.float32)
     self._observations = np.zeros(
-      shape=(max_trajectory_length + 1, *observation_spec.shape),
-      dtype=observation_spec.dtype)
+      shape=(max_trajectory_length + 1, self.num_agents, *observation_shape),
+      dtype=observation_dtype)
     self._actions = np.zeros(
-      shape=(max_trajectory_length, self.num_agents, *action_spec.shape),
-      dtype=action_spec.dtype)
+      shape=(max_trajectory_length, self.num_agents, *action_shape),
+      dtype=action_dtype)
     self._rewards = np.zeros(shape=(max_trajectory_length, self.num_agents), dtype=np.float32)
     self._discounts = np.zeros(max_trajectory_length, dtype=np.float32)
     self._max_trajectory_length = max_trajectory_length
